@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Data and model files (too big for git)
+data/raw/*
+!data/raw/.gitkeep
+*.mp4
+*.mov
+*.avi
+*.pt
+*.pth
+*.onnx
+
+# Outputs
+experiments/**/output/
+runs/
+wandb/
+mlruns/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
