@@ -55,6 +55,33 @@ python -m swimsync.baseline.run_pose data/raw/video.mp4
 
 Output goes to `experiments/baseline/`: an annotated video and a JSON file with keypoints per frame.
 
+## Milestone 1 (due Nov 9): how much of the body is out of the water
+
+Solo swimmer, good-quality video.
+
+```bash
+# 0. get a video (pip install yt-dlp)
+yt-dlp -f "bv*[height<=1080][ext=mp4]" -o "data/raw/solo.mp4" "<youtube-url>"
+
+# 1. run pose + waterline + % above water
+python -m swimsync.waterline.above_water data/raw/solo.mp4 --seg
+
+#    camera doesn't move? give the waterline by hand instead of auto-detecting it:
+python -m swimsync.waterline.above_water data/raw/solo.mp4 --line x1,y1,x2,y2
+
+# 2. hand-label the true waterline on 50 frames (click 2 points per frame)
+python -m swimsync.waterline.label data/raw/solo.mp4 --n 50
+
+# 3. compare detected vs. true waterline
+python -m swimsync.waterline.evaluate data/raw/solo.mp4
+```
+
+Output in `experiments/above_water/output/solo/`: annotated video (keypoints green = above water,
+red = below), `per_frame.csv`, `above_water.png` graph, `summary.json`, `evaluation.json`.
+
+Waterline v1 = blue/cyan color threshold + robust line fit, skipping the swimmer's box.
+If the pool color differs, tune `hue`/`min_sat` in `src/swimsync/waterline/detect.py`.
+
 ## Work log
 
 See [docs/worklog.md](docs/worklog.md).
