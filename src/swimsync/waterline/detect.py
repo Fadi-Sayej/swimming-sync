@@ -36,12 +36,40 @@ def water_mask(frame, hue=(75, 130), min_sat=40, min_val=40):
     return mask
 
 
+def _longest_run_start(flags):
+    """Index where the longest stretch of True values starts, or None."""
+    if not flags.any():
+        return None
+    padded = np.concatenate([[False], flags, [False]]).astype(np.int8)
+    edges = np.flatnonzero(np.diff(padded))
+    starts, ends = edges[::2], edges[1::2]
+    return int(starts[np.argmax(ends - starts)])
+
+
+def _robust_line(xs, ys, tol=6.0, iters=200, seed=0):
+    """RANSAC line fit: returns (a, b, inlier_mask), ignoring outlier columns."""
+    xs, ys = np.asarray(xs, float), np.asarray(ys, float)
+    rng = np.random.default_rng(seed)
+    i, j = rng.integers(0, len(xs), (2, iters))
+    keep = xs[i] != xs[j]
+    i, j = i[keep], j[keep]
+    a = (ys[j] - ys[i]) / (xs[j] - xs[i])
+    b = ys[i] - a * xs[i]
+    resid = np.abs(ys[None, :] - (a[:, None] * xs[None, :] + b[:, None]))
+    inliers = resid[np.argmax((resid < tol).sum(axis=1))] < tol
+    a, b = np.polyfit(xs[inliers], ys[inliers], 1)
+    return float(a), float(b), inliers
+
+
 def detect_waterline(frame, exclude_boxes=(), step=8, run=25, fill=0.8, **mask_kw):
     """Find the waterline in one frame.
 
-    For each sampled column, the edge is the first row from the top below which
-    at least `fill` of the next `run` rows are water. Columns inside
-    `exclude_boxes` (the swimmer) are skipped so the body doesn't bend the line.
+    For each sampled column, the edge is where the tallest stretch of water
+    starts (rows where at least `fill` of the next `run` rows are water). The
+    tallest stretch is the pool itself, so blue walls or banners higher up are
+    skipped. A RANSAC fit then ignores columns that disagree (e.g. a blue banner
+    merging with the water). Columns inside `exclude_boxes` (the swimmer) are
+    skipped so the body doesn't bend the line.
     Returns a Waterline, or None if too few columns found an edge.
     """
     mask = water_mask(frame, **mask_kw) > 0
@@ -57,42 +85,56 @@ def detect_waterline(frame, exclude_boxes=(), step=8, run=25, fill=0.8, **mask_k
         if any(x1 <= x <= x2 for x1, _, x2, _ in exclude_boxes):
             continue
         tried += 1
-        hits = np.flatnonzero(window[:, x] >= fill)
-        if hits.size:
+        start = _longest_run_start(window[:, x] >= fill)
+        if start is not None:
             xs.append(x)
             # the window reaches `fill` a few rows before the true edge; correct for it
-            ys.append(hits[0] + run * (1 - fill))
+            ys.append(start + run * (1 - fill))
 
     if len(xs) < 5:
         return None
-    pts = np.array(list(zip(xs, ys)), dtype=np.float32)
-    vx, vy, x0, y0 = cv2.fitLine(pts, cv2.DIST_HUBER, 0, 0.01, 0.01).ravel()
-    if abs(vx) < 1e-6:
-        return None
-    a = vy / vx
-    b = y0 - a * x0
-    return Waterline(float(a), float(b), len(xs) / max(tried, 1))
+    a, b, inliers = _robust_line(xs, ys)
+    return Waterline(a, b, int(inliers.sum()) / max(tried, 1))
 
 
 class SmoothedWaterline:
-    """Exponential smoothing across frames so the line doesn't jitter."""
+    """Exponential smoothing across frames so the line doesn't jitter.
 
-    def __init__(self, alpha=0.3):
+    A new line more than `jump` px away from the smoothed one (at either image
+    edge) is not averaged in:
+      - confident (>= `sure` of columns agree): a scene cut, start over there now;
+      - unsure (e.g. splash): ignored, unless it holds for `confirm` frames in a row.
+    """
+
+    def __init__(self, alpha=0.3, jump=40.0, sure=0.5, confirm=10, width=1920):
         self.alpha = alpha
+        self.jump = jump
+        self.sure = sure
+        self.confirm = confirm
+        self.edges = np.array([0.0, float(width)])
         self.line = None
+        self.far = []  # recent lines far from the smoothed one
+
+    def _close(self, l1, l2):
+        return np.abs(l1.y_at(self.edges) - l2.y_at(self.edges)).max() <= self.jump
 
     def update(self, new):
         if new is None:
             return self.line
         if self.line is None:
             self.line = new
-        else:
+        elif self._close(new, self.line):
+            self.far = []
             k = self.alpha
             self.line = Waterline(
                 (1 - k) * self.line.a + k * new.a,
                 (1 - k) * self.line.b + k * new.b,
                 new.confidence,
             )
+        else:
+            self.far = self.far + [new] if self.far and self._close(new, self.far[-1]) else [new]
+            if new.confidence >= self.sure or len(self.far) >= self.confirm:
+                self.line, self.far = new, []
         return self.line
 
 

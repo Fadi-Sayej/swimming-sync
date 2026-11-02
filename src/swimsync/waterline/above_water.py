@@ -42,12 +42,28 @@ def pick_device():
     return "cpu"
 
 
-def main_swimmer(result):
-    """Index of the biggest detected person (solo video = one swimmer)."""
+def boxes_of(result):
+    """Person boxes of an Ultralytics result as an (n, 4) xyxy array."""
     if result.boxes is None or len(result.boxes) == 0:
-        return None
-    xyxy = result.boxes.xyxy.cpu().numpy()
+        return np.zeros((0, 4))
+    return result.boxes.xyxy.cpu().numpy()
+
+
+def pick_swimmer(xyxy, line):
+    """Index of the biggest person box that reaches below the waterline.
+
+    People fully above the water (judges, spectators, staff) are ignored, so a
+    missed swimmer gives None instead of a bystander. Without a waterline, the
+    biggest box wins.
+    """
+    xyxy = np.asarray(xyxy, dtype=float).reshape(-1, 4)
     areas = (xyxy[:, 2] - xyxy[:, 0]) * (xyxy[:, 3] - xyxy[:, 1])
+    if line is not None:
+        center_x = (xyxy[:, 0] + xyxy[:, 2]) / 2
+        in_water = ~line.is_above(center_x, xyxy[:, 3])
+        areas = np.where(in_water, areas, -1.0)
+    if areas.size == 0 or areas.max() < 0:
+        return None
     return int(np.argmax(areas))
 
 
@@ -71,7 +87,7 @@ def run(video, pose_model, seg_model, fixed_line, kp_conf, out_root):
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     writer = cv2.VideoWriter(str(out_dir / "annotated.mp4"), cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
 
-    smoother = SmoothedWaterline()
+    smoother = SmoothedWaterline(width=w)
     rows, kp_log = [], []
 
     for i in tqdm(range(total or 10**9), desc="frames"):
@@ -79,9 +95,11 @@ def run(video, pose_model, seg_model, fixed_line, kp_conf, out_root):
         if not ok:
             break
         r = pose.predict(frame, device=device, verbose=False)[0]
-        idx = main_swimmer(r)
+        # pick the swimmer with the last known waterline, then refine the line without her
+        xyxy = boxes_of(r)
+        idx = pick_swimmer(xyxy, fixed_line or smoother.line)
 
-        box = r.boxes.xyxy[idx].cpu().numpy().tolist() if idx is not None else None
+        box = xyxy[idx].tolist() if idx is not None else None
         if fixed_line is not None:
             line = fixed_line
         else:
@@ -120,7 +138,7 @@ def run(video, pose_model, seg_model, fixed_line, kp_conf, out_root):
 
         if seg is not None and line is not None:
             s = seg.predict(frame, device=device, classes=[0], retina_masks=True, verbose=False)[0]
-            j = main_swimmer(s)
+            j = pick_swimmer(boxes_of(s), line)
             if j is not None and s.masks is not None:
                 m = s.masks.data[j].cpu().numpy() > 0.5
                 ys, xs = np.nonzero(m)

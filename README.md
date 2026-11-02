@@ -79,9 +79,19 @@ python -m swimsync.waterline.evaluate data/raw/solo.mp4
 Output in `experiments/above_water/output/solo/`: annotated video (keypoints green = above water,
 red = below), `per_frame.csv`, `above_water.png` graph, `summary.json`, `evaluation.json`.
 
-Waterline v1 = blue/cyan color threshold + robust line fit, skipping the swimmer's box.
+Waterline v1 = blue/cyan color threshold; in each column the waterline is where the tallest
+stretch of water starts (so blue walls/banners above the pool are skipped), then a RANSAC line
+fit ignores columns that disagree. The swimmer's box is skipped. The swimmer is the biggest
+person whose box reaches below the waterline, so judges and spectators are never picked.
 If the pool color differs, tune `hue`/`min_sat` in `src/swimsync/waterline/detect.py`.
+
+## Tests
+
+```bash
+pytest
+```
 
 ## Work log
 
 See [docs/worklog.md](docs/worklog.md).
+Problems we hit and how we fixed them: [docs/problems.md](docs/problems.md).
