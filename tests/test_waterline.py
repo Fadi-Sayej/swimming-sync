@@ -143,3 +143,40 @@ def test_unsure_far_line_is_taken_if_it_lasts():
     for _ in range(10):
         line = s.update(Waterline(0.0, 470.0, 0.2))
     assert abs(float(line.y_at(960)) - 470) < 1
+
+
+def test_all_blue_frame_has_no_waterline():
+    # end logo screen of the solo video: the whole frame is blue, no surface in view
+    f = np.zeros((H, W, 3), np.uint8)
+    f[:] = POOL_BLUE
+    assert detect_waterline(f) is None
+
+
+def test_smoothing_holds_line_through_a_short_miss():
+    from swimsync.waterline.detect import SmoothedWaterline, Waterline
+
+    s = SmoothedWaterline(forget=25)
+    s.update(Waterline(0.0, 420.0, 1.0))
+    for _ in range(24):
+        line = s.update(None)
+    assert line is not None and abs(float(line.y_at(960)) - 420) < 1
+
+
+def test_smoothing_drops_line_after_a_long_miss():
+    from swimsync.waterline.detect import SmoothedWaterline, Waterline
+
+    s = SmoothedWaterline(forget=25)
+    s.update(Waterline(0.0, 420.0, 1.0))
+    for _ in range(25):
+        line = s.update(None)
+    assert line is None
+    line = s.update(Waterline(0.0, 426.0, 0.6))  # back to the pool: start fresh
+    assert abs(float(line.y_at(960)) - 426) < 1
+
+
+def test_few_agreeing_columns_give_no_waterline():
+    # logo screen: only the columns under the white logo text show an "edge" (~5-9% of columns)
+    f = np.zeros((H, W, 3), np.uint8)
+    f[:] = POOL_BLUE
+    f[:500, 900:1050] = (255, 255, 255)  # 150 px of 1920 = ~8% of columns
+    assert detect_waterline(f) is None

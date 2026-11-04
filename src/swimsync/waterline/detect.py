@@ -61,16 +61,19 @@ def _robust_line(xs, ys, tol=6.0, iters=200, seed=0):
     return float(a), float(b), inliers
 
 
-def detect_waterline(frame, exclude_boxes=(), step=8, run=25, fill=0.8, **mask_kw):
+def detect_waterline(frame, exclude_boxes=(), step=8, run=25, fill=0.8, min_conf=0.15, **mask_kw):
     """Find the waterline in one frame.
 
     For each sampled column, the edge is where the tallest stretch of water
     starts (rows where at least `fill` of the next `run` rows are water). The
     tallest stretch is the pool itself, so blue walls or banners higher up are
-    skipped. A RANSAC fit then ignores columns that disagree (e.g. a blue banner
-    merging with the water). Columns inside `exclude_boxes` (the swimmer) are
-    skipped so the body doesn't bend the line.
-    Returns a Waterline, or None if too few columns found an edge.
+    skipped. A column whose water reaches the top of the image has no surface in
+    view (e.g. an all-blue logo screen) and gives no edge. A RANSAC fit then
+    ignores columns that disagree (e.g. a blue banner merging with the water).
+    Columns inside `exclude_boxes` (the swimmer) are skipped so the body doesn't
+    bend the line.
+    Returns a Waterline, or None if too few columns found an edge or fewer than
+    `min_conf` of them agree on the line (pool frames: >= 0.21; logo screen: <= 0.09).
     """
     mask = water_mask(frame, **mask_kw) > 0
     h, w = mask.shape
@@ -86,7 +89,7 @@ def detect_waterline(frame, exclude_boxes=(), step=8, run=25, fill=0.8, **mask_k
             continue
         tried += 1
         start = _longest_run_start(window[:, x] >= fill)
-        if start is not None:
+        if start:  # None (no water) or 0 (water up to the top edge, no surface seen)
             xs.append(x)
             # the window reaches `fill` a few rows before the true edge; correct for it
             ys.append(start + run * (1 - fill))
@@ -94,7 +97,10 @@ def detect_waterline(frame, exclude_boxes=(), step=8, run=25, fill=0.8, **mask_k
     if len(xs) < 5:
         return None
     a, b, inliers = _robust_line(xs, ys)
-    return Waterline(a, b, int(inliers.sum()) / max(tried, 1))
+    conf = int(inliers.sum()) / max(tried, 1)
+    if conf < min_conf:
+        return None
+    return Waterline(a, b, conf)
 
 
 class SmoothedWaterline:
@@ -104,13 +110,17 @@ class SmoothedWaterline:
     edge) is not averaged in:
       - confident (>= `sure` of columns agree): a scene cut, start over there now;
       - unsure (e.g. splash): ignored, unless it holds for `confirm` frames in a row.
+    Frames with no line keep the last one, but after `forget` of them in a row
+    (e.g. a logo screen) the line is dropped and the next one starts fresh.
     """
 
-    def __init__(self, alpha=0.3, jump=40.0, sure=0.5, confirm=10, width=1920):
+    def __init__(self, alpha=0.3, jump=40.0, sure=0.5, confirm=10, forget=25, width=1920):
         self.alpha = alpha
         self.jump = jump
         self.sure = sure
         self.confirm = confirm
+        self.forget = forget
+        self.missed = 0
         self.edges = np.array([0.0, float(width)])
         self.line = None
         self.far = []  # recent lines far from the smoothed one
@@ -120,7 +130,11 @@ class SmoothedWaterline:
 
     def update(self, new):
         if new is None:
+            self.missed += 1
+            if self.missed >= self.forget:
+                self.line, self.far = None, []
             return self.line
+        self.missed = 0
         if self.line is None:
             self.line = new
         elif self._close(new, self.line):

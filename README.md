@@ -81,7 +81,8 @@ red = below), `per_frame.csv`, `above_water.png` graph, `summary.json`, `evaluat
 
 Waterline v1 = blue/cyan color threshold; in each column the waterline is where the tallest
 stretch of water starts (so blue walls/banners above the pool are skipped), then a RANSAC line
-fit ignores columns that disagree. The swimmer's box is skipped. The swimmer is the biggest
+fit ignores columns that disagree. Frames with no surface in view (e.g. an all-blue logo
+screen) give no waterline. The swimmer's box is skipped. The swimmer is the biggest
 person whose box reaches below the waterline, so judges and spectators are never picked.
 If the pool color differs, tune `hue`/`min_sat` in `src/swimsync/waterline/detect.py`.
 

@@ -53,11 +53,15 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 - **1st try failed:** "Restart if the new height holds 3 frames" missed frame 4051 (a 1-frame pool shot at the very end) and was fooled by a splash that held for 3 frames.
 - **Result (all 50 labels):** 4.1 px mean error, 9.6 px max, 99.0% above/below agreement. Splash frames at 3.5 s are fixed too.
 
-## Still open
+### 6. Waterline drawn on the end logo screen (fixed 2026-11-02)
+- **Problem:** The last 3 s (frames 3976-4050) are an all-blue logo screen with no pool, but the detector put a line at the top (y=5) with high confidence.
+- **Why:** The whole screen is blue, so in every column the "water" starts at the top row.
+- **1st try (not enough):** Ignore columns whose water reaches the top edge (no surface in view). The logo screen then gave a weak line at y≈555 from the few columns under the logo text (5-9% of columns).
+- **Fix:** (1) columns with water up to the top edge are skipped; (2) a line that fewer than 15% of columns agree on counts as "no waterline" (pool frames are always >= 21%, the logo <= 9%); (3) after 1 s (25 frames) with no waterline, the smoothing forgets the old line.
+- **Result:** No line on frames 4000-4050. The first second of the logo still shows the last pool line (held on purpose so short misses like splashes keep a line). Pool frames, averages and the 50-label evaluation are unchanged.
+- **Side note:** In 6 of those held frames (3987-3992) the pose model sees a "person" in the logo pattern and measures it at 0% above water. Same as before the fix; effect on the average is ~0.05 points.
 
-### 6. Waterline wrong on the end logo screen
-- **Problem:** The last ~3 s are a logo screen with no pool, but the detector still returns a line there.
-- **Impact:** No swimmer there, so no effect on the averages. Not fixed yet.
+## Still open
 
 ### 7. Pose model misses the swimmer underwater
 - **Problem:** Swimmer found in only 74% of frames, mostly missed when fully underwater.
