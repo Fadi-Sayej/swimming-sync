@@ -66,6 +66,9 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 ### 7. Pose model misses the swimmer underwater
 - **Problem:** Swimmer found in only 74% of frames, mostly missed when fully underwater.
 - **Impact:** This is the main problem the project is meant to solve (fine-tuning pose models for the pool).
+- **Tried (2026-11-04):** The largest model of the same family (YOLO11x-pose, ~3x bigger) instead of YOLO11m-pose. No better: swimmer found 73.7% vs 74.1%. Each finds ~270 frames the other misses, but 714 pool frames (18%) are missed by both.
+- **What the misses look like:** she lies flat at the surface (seen edge-on), dives under water in bubbles, or hasn't entered the pool yet (opening walk-on; that "miss" is correct).
+- **Conclusion:** model size isn't the issue; the model has to be fine-tuned on pool frames.
 
 ### 11. Detector misses clear water above the blue (2026-11-02)
 - **Problem:** In the start/end shots the detector puts the line ~10 px below the real surface.
