@@ -114,6 +114,13 @@ scripts/labelstudio.sh
 
 How to label: [docs/labeling_guide.md](docs/labeling_guide.md). Videos: [docs/videos.md](docs/videos.md).
 
+After labeling, build the training sets from Label Studio and train (Label Studio must be running):
+
+```bash
+python -m swimsync.dataset.export_yolo   # data/raw/datasets/m2_4cls and m2_2cls
+scripts/train_limbs.sh                   # YOLO11s, both versions; DEVICE=0 on the college GPU
+```
+
 ## Tests
 
 ```bash

@@ -91,6 +91,21 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 - **Why:** `label-studio --version` (run to check the install) doesn't just print the version in 1.23: it starts a server on port 8080 with a default database. That stray server held the port, so my real server never started and every request went to the empty one.
 - **Fix:** Stopped the stray server, deleted its empty default database, started the real one with `scripts/labelstudio.sh`. Don't run `label-studio --version`; use `pip show label-studio`.
 
+### 16. Labeling: many small boxes per leg, and 42% of frames skipped (2026-11-09)
+- **Problem 1:** Some frames had a leg labeled with 3-4 small boxes along it instead of one box. The model would learn that a leg is a short piece.
+- **Fix:** Rule made explicit: one box per limb, from where it leaves the water to the toes / fingertips. Found the 6 frames with doubled boxes through the Label Studio API; Fadi merged them.
+- **Problem 2:** 170 of 401 training frames were skipped (no limbs, TV graphics, or left/right unclear), leaving 231 labeled frames.
+- **Response:** Upside-down rule for left/right (front of the legs visible = her left is on your left; back visible = on your right). Frames with no limbs should be submitted with no boxes, not skipped. Train both a 4-class (left/right) and a 2-class (leg/arm) model to see if the sides should come from the detector at all.
+
+### 17. Image mirroring would teach the wrong side (2026-11-09)
+- **Problem:** YOLO training mirrors images left-right by default (`fliplr=0.5`). A mirrored left leg looks like a right leg but keeps the `left_leg` label.
+- **Fix:** `fliplr=0.0` in `scripts/train_limbs.sh`, for both versions so the comparison is fair.
+
+### 18. Training results saved in the wrong folder (2026-11-09)
+- **Problem:** `project=experiments/limbs/output` saved to `runs/detect/experiments/limbs/output/` instead.
+- **Why:** Newer Ultralytics puts relative `project` paths inside `runs/<task>/`.
+- **Fix:** Moved the results; `scripts/train_limbs.sh` now passes an absolute path.
+
 ## Still open
 
 ### 7. Pose model misses the swimmer underwater
