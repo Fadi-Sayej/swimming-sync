@@ -1,0 +1,77 @@
+# Labeling guide: leg and arm boxes (milestone 2)
+
+## Labels
+
+| Label | Key | What |
+|-------|-----|------|
+| `left_leg` | 1 | her **own** left leg, hip to toes |
+| `right_leg` | 2 | her **own** right leg, hip to toes |
+| `left_arm` | 3 | her **own** left arm, every visible part from shoulder to fingertips |
+| `right_arm` | 4 | her **own** right arm, every visible part from shoulder to fingertips |
+
+Left/right is always the swimmer's own side, not the side of the image. When she faces the
+camera, her left leg is on the right of the image. When she is upside down, think about which
+way her body faces before choosing.
+
+## Rules
+
+1. **Box only what you can see**, including a limb seen through the water. Don't guess where a
+   hidden part continues.
+2. **Tight boxes**: the box edges touch the outermost visible pixels (toes, fingertips).
+3. **Legs together** (e.g. a vertical): still two boxes, even if they overlap almost completely.
+4. **Can't tell which side?** Skip the frame. A wrong side teaches the model the wrong thing.
+5. **Nothing visible** (fully underwater, or too small to see): submit the frame with no boxes.
+6. **Only the swimmer.** No boxes on coaches, judges, officials or people on the deck.
+7. **Pre-filled boxes come from the pose model.** Treat them as a rough start: fix the edges,
+   delete wrong ones, and **check the side on every one** (the model often swaps left and right
+   when she is upside down).
+
+## Frames
+
+`python -m swimsync.dataset.pick_frames` picks the frames (see the script for options):
+
+- **train**: ~400 frames from the three Junior Worlds 2026 broadcasts (Budapest).
+- **test**: 25 frames from each test video (Doha 2024, Paris 2025, Paris 2026, Budapest 2024).
+  Label them the same way. They are never used for training; they give the mAP50 score.
+  Budapest 2024 is reported separately (same city as the training videos, see `docs/videos.md`).
+
+About 10% of the frames have no swimmer found by the model. Most are underwater moments;
+label whatever you can see, or submit with no boxes.
+
+Images and import files are in `data/raw/frames/m2/` (not in git).
+
+## Label Studio
+
+**Start it** (each labeling session), then open http://localhost:8080:
+
+```bash
+scripts/labelstudio.sh
+```
+
+Log in with the email and password in `data/raw/labelstudio/credentials.txt`. Your labels are
+saved in `data/raw/labelstudio/` (not in git): don't delete that folder. Stop with Ctrl+C.
+
+**Two projects:** `M2 legs+arms - train` (401 frames) and `M2 legs+arms - test` (97 frames).
+
+**Per frame:**
+1. Click **Label All Tasks** (or open a frame). Pre-filled boxes show up as a prediction.
+2. Fix them: drag the corners, change the label (click the box, then 1-4), delete wrong ones
+   (Backspace), draw missing ones (press 1-4, then drag).
+3. **Submit** (Ctrl+Enter). Not a pool shot, or can't tell the side? **Skip**.
+
+About 5% of the frames are TV graphics or athlete intros that slipped through: just skip them.
+
+**When done:** Export → YOLO, save the zip into `data/labels/m2/`.
+
+### First-time setup (already done on Fadi's Mac)
+
+```bash
+python3 -m venv ~/.venvs/label-studio && ~/.venvs/label-studio/bin/pip install label-studio
+python -m swimsync.dataset.pick_frames --train data/raw/jr2026_*.mp4 --test data/raw/test/*.mp4
+scripts/labelstudio.sh          # in one terminal; creates the login from credentials.txt
+python -m swimsync.dataset.labelstudio   # in another: creates both projects, imports the frames
+```
+
+`credentials.txt` has 4 lines: `url: http://localhost:8080`, `email: ...`, `password: ...`,
+`api_token: <40 hex characters>`. Don't run `label-studio --version`: in 1.23 it starts a
+second server that blocks port 8080 (see docs/problems.md #15).

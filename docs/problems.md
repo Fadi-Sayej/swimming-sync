@@ -61,6 +61,36 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 - **Result:** No line on frames 4000-4050. The first second of the logo still shows the last pool line (held on purpose so short misses like splashes keep a line). Pool frames, averages and the 50-label evaluation are unchanged.
 - **Side note:** In 6 of those held frames (3987-3992) the pose model sees a "person" in the logo pattern and measures it at 0% above water. Same as before the fix; effect on the average is ~0.05 points.
 
+## Milestone 2: leg and hand detectors
+
+### 12. Long video downloads stopped halfway (2026-11-09)
+- **Problem:** The 2-hour broadcast downloads (4-5 GB each) stopped at 3.4 GB with "Failed to resolve ... googlevideo.com".
+- **Why:** The internet connection dropped for a few minutes; yt-dlp gave up after its default 10 retries.
+- **Fix:** Re-ran with `--continue --retries 50 --fragment-retries 50`. It resumes from the `.part` file instead of starting over.
+- **Also:** The fan-channel titles ("Solo Free 2026-5.The Netherlands") name the swimmer's country, not the pool. Checked each video's description for the real event before using it as a different-pool test video (see `docs/videos.md`).
+
+### 13. A "different pool" test video was from the training city (2026-11-09)
+- **Problem:** The Budapest 2024 World Cup video was picked as a test video from another pool, but the Junior Worlds 2026 training videos turned out to be from Budapest too (a "HUNGARY" banner in the broadcast; confirmed in the video description).
+- **Why it matters:** Testing on the same pool as training makes the score look better than it would be on a new pool.
+- **Fix:** Budapest 2024 stays as a test video but its score is reported separately. The main "new pool" test set is Doha 2024 + Paris 2025/2026.
+
+### 14. Finding "swimmer in the pool" frames in a full broadcast (2026-11-09)
+- **Problem:** Broadcasts mix pool shots with sofa, walk-on, interview and score-graphic shots. The frame picker must keep only the pool shots with the swimmer.
+- **1st idea dropped:** Reuse the milestone 1 waterline detector to skip underwater views. From above, the pool edge also looks like a "waterline", so it would have dropped the wide shots too.
+- **2nd idea dropped:** Share of blue in the frame. The navy sofa backdrop counts as "water" (0.81).
+- **Fix:** Keep the biggest person whose surroundings (box grown by 50%) are at least 30% pool water. Pool water is a narrower colour range: hue 80-102 (cyan/teal), so the navy backdrop (hue ~106) is out.
+- **Then:** That range was first tuned on the bright Junior Worlds pool only and missed the darker Paris and Budapest water (brightness ~125 vs a 140 cut). Lowered to saturation >= 50, brightness >= 90 after measuring all five pools; the sofa still fails. On 98 sample frames: no sofa/deck/interview shot kept, swimmer found in 44/50 pool frames where the model saw a person.
+- **Known gap:** In the widest shots the swimmer is ~20-40 px tall and the pose model rarely finds her, so those shots are rare in the picks.
+- **Still 16% junk:** Looking at all 400 first picks, 64 were not pool shots: presenters in front of a cyan stage backdrop, the empty arena before the session, countdown clocks, medals, sofa shots. The cyan backdrop has the same colour as the water.
+- **3rd idea dropped:** Also require pool water just below the person's box. It kept 52 of the 64 (most boxes touch the bottom of the frame, and below the presenters is more cyan backdrop).
+- **Final fix:** CLIP (an image-text model, no training) scores each frame against "a swimmer in a swimming pool"-type prompts vs "a person on a stage", "people on a sofa", "an empty arena", "a TV graphic" etc. Frames under 0.3 "pool" are not picked. On the same 400: removed 56 of 64 junk frames, dropped 5 of 336 good ones. After the re-pick ~5% junk is left (mostly animated transitions that show swimmers); those get skipped while labeling.
+
+### 15. Label Studio rejected the API token (2026-11-09)
+- **Problem:** Every API call to Label Studio returned "Invalid token.", even though the token was in its database.
+- **Wrong guesses:** (1) new versions turn off old-style tokens, so I turned them on; (2) the server only reads that at start, so I restarted it. Neither helped.
+- **Why:** `label-studio --version` (run to check the install) doesn't just print the version in 1.23: it starts a server on port 8080 with a default database. That stray server held the port, so my real server never started and every request went to the empty one.
+- **Fix:** Stopped the stray server, deleted its empty default database, started the real one with `scripts/labelstudio.sh`. Don't run `label-studio --version`; use `pip show label-studio`.
+
 ## Still open
 
 ### 7. Pose model misses the swimmer underwater

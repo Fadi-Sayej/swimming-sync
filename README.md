@@ -105,6 +105,15 @@ Plan:
 - Fine-tune YOLO11 detection on the Mac (MPS); use the college GPU if training is too slow.
 - Evaluate with mAP50 on held-out frames from videos not used in training.
 
+```bash
+# pick ~400 train + ~100 test frames, with pre-filled boxes from the pose model
+python -m swimsync.dataset.pick_frames --train data/raw/jr2026_*.mp4 --test data/raw/test/*.mp4
+# label them in Label Studio (http://localhost:8080)
+scripts/labelstudio.sh
+```
+
+How to label: [docs/labeling_guide.md](docs/labeling_guide.md). Videos: [docs/videos.md](docs/videos.md).
+
 ## Tests
 
 ```bash
