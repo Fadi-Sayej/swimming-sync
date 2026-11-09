@@ -22,6 +22,29 @@ for legs but not for arms, which suggests taking the side from the pose model in
 (milestone 2 step 3) rather than from the detector. Val is small (83 boxes), so these numbers
 are rough.
 
-## Test (new pools: Doha + Paris; Budapest separately)
+## Test, 2026-11-09
 
-Pending: test frames not labeled yet.
+95 of 97 test frames labeled (2 Paris 2025 frames not done). New pools = Doha 2024 + Paris 2025/2026
+(72 frames); Budapest 2024 (23 frames) is the same city as training, scored separately.
+
+mAP50:
+
+| | Val (training pool) | Budapest (same city) | **New pools** |
+|---|---|---|---|
+| 2 classes: all | 0.55 | 0.47 | **0.23** |
+| 2 classes: leg | 0.71 | 0.71 | **0.37** |
+| 2 classes: arm | 0.38 | 0.23 | **0.09** |
+| 4 classes: all | 0.34 | 0.26 | **0.09** |
+
+New pools by video (2 classes): Doha 0.25, Paris 2025 0.20, Paris 2026 0.29 (all similar).
+Side correct on new pools (4 classes): legs 20 of 42, arms 17 of 34 (both a coin flip).
+
+**Reading:**
+- The model doesn't carry over to new pools: legs drop from 0.71 to 0.37, arms almost vanish.
+  Budapest (also a close-up fan video, like the new-pool test videos) scores like the training
+  pool, so the drop is about the pool, not about close-ups vs broadcast shots.
+- On new pools the errors are mostly **misses** (recall 0.29), not invented limbs.
+- Left/right from the detector is a coin flip on new pools, for legs too. Supports detecting
+  "leg"/"arm" and taking the side from the pose model inside the box.
+- All training frames come from one pool (Junior Worlds 2026, Budapest). More pools in training
+  is the most likely fix; stronger colour augmentation is a cheap thing to try first.

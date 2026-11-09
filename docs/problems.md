@@ -119,3 +119,8 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 - **Problem:** In the start/end shots the detector puts the line ~10 px below the real surface.
 - **Why:** It only looks for blue. Where the water rises above the blue tiles, the top of the water is clear, so it isn't counted.
 - **Impact:** Small effect (~10 px, a few % of body height). A trained water segmentation model (pipeline step 3) should fix it.
+
+### 19. Leg/arm detector doesn't carry over to new pools (2026-11-09)
+- **Problem:** Trained on one pool (Junior Worlds 2026, Budapest), the 2-class detector scores mAP50 0.55 on held-out frames from that pool but 0.23 on Doha + Paris (legs 0.71 -> 0.37, arms 0.38 -> 0.09). It mostly misses limbs there.
+- **Why (likely):** All 184 training frames come from one pool, one broadcast style and one water colour. Budapest 2024 (same city, close-up fan video) still scores 0.47, so it is the pool, not the close-ups.
+- **Next:** Label frames from more pools; try stronger colour augmentation. Details: `experiments/limbs/results.md`.
