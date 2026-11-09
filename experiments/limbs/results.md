@@ -48,3 +48,27 @@ Side correct on new pools (4 classes): legs 20 of 42, arms 17 of 34 (both a coin
   "leg"/"arm" and taking the side from the pose model inside the box.
 - All training frames come from one pool (Junior Worlds 2026, Budapest). More pools in training
   is the most likely fix; stronger colour augmentation is a cheap thing to try first.
+
+## Stronger colour augmentation, 2026-11-09
+
+Same as 2 classes above, plus `hsv_h=0.05 hsv_s=0.9 hsv_v=0.6` (defaults 0.015 / 0.7 / 0.4),
+to cover the measured water colour differences (Paris is much duller and darker, Doha bluer):
+
+```bash
+yolo detect train data=data/raw/datasets/m2_2cls/data.yaml model=yolo11s.pt imgsz=960 epochs=100 \
+  patience=30 batch=8 fliplr=0.0 seed=0 device=mps hsv_h=0.05 hsv_s=0.9 hsv_v=0.6 \
+  project=$PWD/experiments/limbs/output name=2cls_color
+```
+
+| mAP50 | 2 classes | + stronger colour |
+|---|---|---|
+| Val (training pool) | 0.55 | 0.55 |
+| Budapest | 0.47 | 0.41 |
+| **New pools** | **0.23** | **0.21** |
+| New pools: leg / arm | 0.37 / 0.09 | 0.33 / 0.10 |
+| Doha / Paris 2025 / Paris 2026 | 0.25 / 0.20 / 0.29 | 0.24 / 0.19 / 0.29 |
+
+**Reading:** no gain (the differences are within noise for 72 test frames and one training run).
+Water colour alone is not what separates the pools; the rest of the look (camera height and
+angle, lighting, reflections, water texture, swimsuits) matters too. More pools in the training
+data remains the main fix.

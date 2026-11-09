@@ -123,4 +123,5 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 ### 19. Leg/arm detector doesn't carry over to new pools (2026-11-09)
 - **Problem:** Trained on one pool (Junior Worlds 2026, Budapest), the 2-class detector scores mAP50 0.55 on held-out frames from that pool but 0.23 on Doha + Paris (legs 0.71 -> 0.37, arms 0.38 -> 0.09). It mostly misses limbs there.
 - **Why (likely):** All 184 training frames come from one pool, one broadcast style and one water colour. Budapest 2024 (same city, close-up fan video) still scores 0.47, so it is the pool, not the close-ups.
-- **Next:** Label frames from more pools; try stronger colour augmentation. Details: `experiments/limbs/results.md`.
+- **Tried:** Stronger colour augmentation (hue/saturation/brightness) to imitate other water colours: new pools 0.21 vs 0.23, no gain. Colour alone isn't the gap.
+- **Next:** Label frames from more pools (keep Doha + Paris out of training). Details: `experiments/limbs/results.md`.
