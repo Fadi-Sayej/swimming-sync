@@ -183,7 +183,10 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--train", type=Path, nargs="+", required=True)
     p.add_argument("--test", type=Path, nargs="*", default=[])
-    p.add_argument("--n-train", type=int, default=400)
+    p.add_argument("--n-train", type=int, default=400, help="total train frames, split by swimmer frames per video")
+    p.add_argument("--n-each", type=int, help="pick this many per training video instead of --n-train")
+    p.add_argument("--split", default="train",
+                   help="name for the picked training frames (e.g. train2 for a new batch; keeps the old ones)")
     p.add_argument("--n-test-each", type=int, default=25)
     p.add_argument("--step", type=float, default=2.0, help="seconds between checked frames (train)")
     p.add_argument("--test-step", type=float, default=1.0, help="seconds between checked frames (test)")
@@ -208,16 +211,20 @@ def main():
     train = [scan(v, model, scene, a.step, device, cache) for v in a.train]
     test = [scan(v, model, scene, a.test_step, device, cache) for v in a.test]
 
-    rows = export(choose(train, a.n_train, a.min_gap, a.min_pool), "train", a.out, a.url_prefix)
-    test_picks = [pk for s in test for pk in choose([s], a.n_test_each, a.min_gap, a.min_pool)]
-    rows += export(test_picks, "test", a.out, a.url_prefix)
+    if a.n_each:
+        train_picks = [pk for s in train for pk in choose([s], a.n_each, a.min_gap, a.min_pool)]
+    else:
+        train_picks = choose(train, a.n_train, a.min_gap, a.min_pool)
+    splits = {a.split: export(train_picks, a.split, a.out, a.url_prefix)}
+    if test:  # only when test videos are given, so a new training batch never overwrites the test set
+        test_picks = [pk for s in test for pk in choose([s], a.n_test_each, a.min_gap, a.min_pool)]
+        splits["test"] = export(test_picks, "test", a.out, a.url_prefix)
 
-    with open(a.out / "manifest.csv", "w", newline="") as f:
-        wr = csv.DictWriter(f, fieldnames=list(rows[0]))
-        wr.writeheader()
-        wr.writerows(rows)
-    for split in ("train", "test"):
-        r = [x for x in rows if x["split"] == split]
+    for split, r in splits.items():
+        with open(a.out / f"manifest_{split}.csv", "w", newline="") as f:
+            wr = csv.DictWriter(f, fieldnames=list(r[0]))
+            wr.writeheader()
+            wr.writerows(r)
         print(f"{split}: {len(r)} frames, {sum(x['kind'] == 'empty' for x in r)} with no swimmer found, "
               f"{sum(x['prefilled_boxes'] > 0 for x in r)} with pre-filled boxes")
     print(f"Saved to {a.out}")

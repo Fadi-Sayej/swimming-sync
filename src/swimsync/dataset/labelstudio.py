@@ -1,9 +1,10 @@
 """Label Studio project config, tasks with pre-filled boxes, and project setup.
 
-Start Label Studio with `scripts/labelstudio.sh`, then (once):
-    python -m swimsync.dataset.labelstudio
-creates the "M2 legs+arms - train" and "- test" projects, links the image folders
-and imports the frames picked by `swimsync.dataset.pick_frames`. Running it again
+Start Label Studio with `scripts/labelstudio.sh`, then (once per batch):
+    python -m swimsync.dataset.labelstudio            # train + test
+    python -m swimsync.dataset.labelstudio train2     # a later batch
+creates one "M2 legs+arms - <split>" project per batch, links its image folder and
+imports the frames picked by `swimsync.dataset.pick_frames`. Running it again
 doesn't import twice.
 """
 
@@ -100,7 +101,7 @@ def main():
         line.split(": ", 1) for line in Path("data/raw/labelstudio/credentials.txt").read_text().splitlines() if ": " in line
     )
     api = LabelStudioAPI(cred["url"], cred["api_token"])
-    for split in ("train", "test"):
+    for split in sys.argv[1:] or ("train", "test"):
         tasks_file = root / f"tasks_{split}.json"
         if not tasks_file.exists():
             sys.exit(f"{tasks_file} not found: run python -m swimsync.dataset.pick_frames first")

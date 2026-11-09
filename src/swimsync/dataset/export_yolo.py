@@ -9,9 +9,10 @@ Writes data/raw/datasets/m2_4cls (left/right leg and arm) and m2_2cls (leg, arm)
     data.yaml                  train / val / test = Doha + Paris (new pools)
     data_budapest.yaml         test = Budapest 2024 (same city as training), scored separately
 
+Training frames come from every "M2 legs+arms - train*" project (train, train2, ...).
 Only labeled frames are used: skipped frames are left out, frames submitted with no
 boxes are kept as "nothing here" examples. val = the last 20% (by time) of each
-training broadcast, so its swimmers are not in train.
+training video, so its swimmers are not in train.
 """
 
 import os
@@ -66,11 +67,15 @@ def split_train_val(names, val_share=0.2):
     return train, val
 
 
-def labeled_frames(api, project_title):
-    """{image file name: box results} for every frame with a submitted (not skipped) label."""
+def project_titles(api):
     projects = api.get("/api/projects?page_size=1000")
     projects = projects.get("results", projects) if isinstance(projects, dict) else projects
-    pid = next(p["id"] for p in projects if p["title"] == project_title)
+    return {p["title"]: p["id"] for p in projects}
+
+
+def labeled_frames(api, project_title):
+    """{image file name: box results} for every frame with a submitted (not skipped) label."""
+    pid = project_titles(api)[project_title]
     tasks = api.get(f"/api/tasks?project={pid}&page_size=10000&fields=all")["tasks"]
     out = {}
     for t in tasks:
@@ -121,12 +126,20 @@ def main():
                 Path("data/raw/labelstudio/credentials.txt").read_text().splitlines() if ": " in line)
     api = LabelStudioAPI(cred["url"], cred["api_token"])
 
-    train_lab, n_train = labeled_frames(api, "M2 legs+arms - train")
-    test_lab, n_test = labeled_frames(api, "M2 legs+arms - test")
+    prefix = "M2 legs+arms - "
+    train_lab, n_train = {}, 0  # file name -> (image folder, results)
+    for title in sorted(project_titles(api)):
+        if title.startswith(prefix + "train"):
+            folder = title[len(prefix):]
+            lab, n = labeled_frames(api, title)
+            train_lab.update({name: (folder, r) for name, r in lab.items()})
+            n_train += n
+            print(f"{title}: {len(lab)} labeled of {n}")
+    test_lab, n_test = labeled_frames(api, prefix + "test")
     train, val = split_train_val(list(train_lab))
     splits = {
-        "train": {n: ("train", train_lab[n]) for n in train},
-        "val": {n: ("train", train_lab[n]) for n in val},
+        "train": {n: train_lab[n] for n in train},
+        "val": {n: train_lab[n] for n in val},
         "test": {n: ("test", r) for n, r in test_lab.items()},
     }
     for n_classes in (4, 2):
