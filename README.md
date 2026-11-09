@@ -86,6 +86,25 @@ screen) give no waterline. The swimmer's box is skipped. The swimmer is the bigg
 person whose box reaches below the waterline, so judges and spectators are never picked.
 If the pool color differs, tune `hue`/`min_sat` in `src/swimsync/waterline/detect.py`.
 
+Result: ~23% of the body above water on average, waterline error 4.1 px on 50 hand-labeled
+frames. The pose model misses the swimmer in ~26% of frames, and a bigger model doesn't help.
+
+## Milestone 2 (next meeting Nov 24, 2026): leg and hand detectors
+
+Agreed with Assaf on Nov 9. Videos where the camera is above the water.
+
+1. **Leg detector:** a bounding-box model that finds only the legs, one box per leg (left / right).
+2. **Hand detector:** the same for hands/arms.
+3. **Pose inside the boxes:** once the boxes work, train the pose model on the cropped leg and hand regions.
+4. **Segmentation:** water / splash / swimmer. Start with SAM 2 (no training) to make masks,
+   then fine-tune YOLO11-seg on them.
+
+Plan:
+- Collect above-water videos (YouTube, different pools and routines).
+- Extract frames and label leg and hand boxes in CVAT or Label Studio (start with ~300-500 frames).
+- Fine-tune YOLO11 detection on the Mac (MPS); use the college GPU if training is too slow.
+- Evaluate with mAP50 on held-out frames from videos not used in training.
+
 ## Tests
 
 ```bash
