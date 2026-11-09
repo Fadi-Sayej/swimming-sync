@@ -115,3 +115,4 @@ pytest
 
 See [docs/worklog.md](docs/worklog.md).
 Problems we hit and how we fixed them: [docs/problems.md](docs/problems.md).
+Videos used and where they come from: [docs/videos.md](docs/videos.md).
