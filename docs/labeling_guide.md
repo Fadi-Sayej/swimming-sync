@@ -52,6 +52,8 @@ Log in with the email and password in `data/raw/labelstudio/credentials.txt`. Yo
 saved in `data/raw/labelstudio/` (not in git): don't delete that folder. Stop with Ctrl+C.
 
 **Two projects:** `M2 legs+arms - train` (401 frames) and `M2 legs+arms - test` (97 frames).
+Later batches: `M2 legs+arms - train2` (4 more pools) and `M2 legs+arms - train3` (132 close-ups
+from 5 more pools, see `docs/videos.md`). Same rules.
 
 **Per frame:**
 1. Click **Label All Tasks** (or open a frame). Pre-filled boxes show up as a prediction.

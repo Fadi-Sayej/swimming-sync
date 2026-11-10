@@ -111,6 +111,16 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 - **Why:** YOLO-seg scores its boxes against boxes around the SAM outlines, which are tighter than the hand-drawn boxes the detector is scored on.
 - **Fix:** `experiments/limbs/box_vs_hand.py` scores both against the hand-drawn boxes. Real gap: 0.56 vs 0.50 on val, 0.41 vs 0.36 on new pools.
 
+### 21. A limb cut in two keeps only its biggest piece (2026-11-10)
+- **Problem:** When something covers the middle of a limb (e.g. the face in front of an arm), SAM's outline comes in two pieces and `mask_polygon` keeps only the bigger one, so the hand is left out.
+- **How often:** 29 of 867 limbs (3%), 4 of them in the test frames.
+- **Fix:** `mask_polygon` keeps every piece at least 10% of the biggest, joined by thin lines into one outline (Ultralytics' `merge_multi_segment`). Checked all 29 by eye: 12 better (hand or foot now included), 6 worse (an extra bit of face or splash), 11 about the same. The reviewed test outlines are unchanged.
+
+### 22. Picking "frames the detector misses" from the training videos gave the wrong frames (2026-11-10)
+- **Problem:** To get more frames like the test misses, a picker ran the detector on the training videos and kept frames where the pose model sees a limb the detector misses. The 44 picks were mostly wide TV shots with small swimmers and scoreboards, and the 5 short videos gave none (their 40 earlier picks already cover them).
+- **Why:** The test misses are close-ups of arms at the surface (Paris). The training videos are TV broadcasts with few close-ups, so there is nothing like them to pick. "Missed" also fired on 75% of frames, because pose boxes and detector boxes rarely line up on small limbs.
+- **Fix:** Dropped the picker and the 44 frames (never labeled). Downloaded 9 close-up solo videos from 5 new pools (Munich, Sweden, Delfin Cup, Singapore, Junior Worlds 2024) instead: `docs/videos.md`, batch 3.
+
 ## Still open
 
 ### 7. Pose model misses the swimmer underwater
@@ -131,8 +141,4 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 - **Tried:** Stronger colour augmentation (hue/saturation/brightness) to imitate other water colours: new pools 0.21 vs 0.23, no gain. Colour alone isn't the gap.
 - **Fix (partial, 2026-11-10):** Labeled 141 frames from 4 more pools (Fukuoka, Markham, Rome, Funchal). New pools: 0.23 -> 0.40 (legs 0.37 -> 0.56, arms 0.09 -> 0.24); Budapest pool unchanged or better.
 - **Still open:** Arms stay weak (0.24) and legs' left/right is still a coin flip on new pools. Details: `experiments/limbs/results.md`.
-
-### 21. A limb cut in two keeps only its biggest piece (2026-11-10)
-- **Problem:** When something covers the middle of a limb (e.g. the face in front of an arm), SAM's outline comes in two pieces and `mask_polygon` keeps only the bigger one, so the hand is left out.
-- **How often:** 29 of 867 limbs (3%), 4 of them in the test frames.
-- **For now:** the review skips those test frames. Fix before the next training run: keep every piece (Ultralytics can join pieces into one outline).
+- **Diagnosis (2026-11-10):** mostly missed limbs, not loose boxes (62% of arms missed). Half of Doha's limbs are in underwater-window and very wide shots, which training doesn't have (2 of 27 found). Paris 2025 misses arms at the surface near the face/body. Both models were still improving at round 100.

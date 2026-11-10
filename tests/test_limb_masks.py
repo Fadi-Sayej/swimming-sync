@@ -41,9 +41,16 @@ def test_polygon_of_a_rectangle_in_0_to_1():
     assert ys.min() == pytest.approx(20 / H, abs=0.02) and ys.max() == pytest.approx(80 / H, abs=0.02)
 
 
-def test_polygon_keeps_the_biggest_piece():
+def test_polygon_drops_a_tiny_speck():
     poly = mask_polygon(mask_with((10, 10, 14, 14), (100, 20, 160, 90)))
     assert poly[:, 0].min() > 0.45
+
+
+def test_polygon_keeps_both_pieces_of_a_limb_cut_in_two():
+    # e.g. the face in front of the arm: upper arm on the left, hand on the right
+    poly = mask_polygon(mask_with((20, 40, 60, 60), (120, 40, 160, 60)))
+    assert poly[:, 0].min() == pytest.approx(20 / W, abs=0.01)
+    assert poly[:, 0].max() == pytest.approx(160 / W, abs=0.01)
 
 
 def test_polygon_of_an_empty_mask_is_none():

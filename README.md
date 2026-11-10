@@ -126,6 +126,14 @@ Leg/arm outlines (segmentation) from the same boxes, with SAM 2 (no drawing):
 ```bash
 python -m swimsync.dataset.limb_masks    # outlines + data/raw/datasets/m2_seg; test outlines go to Label Studio for review
 scripts/train_limbs.sh seg               # YOLO11s-seg
+EPOCHS=200 NAME_SUFFIX=_200ep scripts/train_limbs.sh seg   # longer run, keeps the earlier results
+```
+
+Batch 3 (close-up fan videos from 5 new pools, `data/raw/train3/`):
+
+```bash
+python -m swimsync.dataset.pick_frames --train data/raw/train3/*.mp4 --split train3 --n-each 15 --step 1
+python -m swimsync.dataset.labelstudio train3   # project "M2 legs+arms - train3"
 ```
 
 ## Tests

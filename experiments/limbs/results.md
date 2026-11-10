@@ -148,3 +148,23 @@ in the table above):
 - On the accepted test frames only, the gap is bigger: new pools 0.47 vs 0.41, Budapest 0.72
   vs 0.59 (outline model vs detector, boxes vs hand-drawn boxes). On the skipped (hard) frames
   they are equal (0.32 vs 0.33).
+
+## Why the boxes miss on new pools (diagnosis, 2026-11-10)
+
+Detector (batch 2), new-pool test frames, boxes with confidence >= 0.25:
+
+- **Misses, not loose boxes.** Arms: 30% found (IoU >= 0.5), 8% loose, **62% missed**. Legs: 52%
+  found, 16% loose, 32% missed (14% of legs are found but called "arm").
+- **Doha: two kinds of shots the model never saw.** 6 frames are filmed *through the pool wall*
+  (underwater window camera) and 2 are very wide shots with tiny limbs. Together they hold 27 of
+  Doha's 57 limbs, and only 2 are found. On Doha's normal shots, 20 of 30 limbs (67%) are found,
+  about as many as Budapest 2024 (70%).
+- **Paris 2025 is the hardest normal video:** 37% of limbs found (Paris 2026 56%). Its misses are
+  mostly arms at the surface next to the face or body, often in splash, and some clearly visible
+  raised arms.
+- **Not a lack of arm labels:** training has 279 arms and 274 legs.
+- **Limb size is not the main cause:** test close-ups have much bigger limbs than training
+  (median long side 660-840 px vs ~340 px), but Paris 2026 has the biggest limbs and the best
+  score.
+- **Both models were still improving at round 100** (detector val 0.485 -> 0.500 over the last
+  5 rounds), so training longer is a free try.

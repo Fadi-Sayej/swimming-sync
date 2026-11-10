@@ -27,6 +27,7 @@ TO_2 = {"left_leg": "leg", "right_leg": "leg", "left_arm": "arm", "right_arm": "
 FRAMES = Path("data/raw/frames/m2")
 OUT = Path("data/raw/datasets/m2_seg")
 REVIEW_TITLE = "M2 limb outlines - test"
+OUTLINE_VERSION = 2  # bump to redo the cached outlines (2: keep every piece of a cut limb)
 
 
 # --- checks and formats ---------------------------------------------------------------
@@ -49,16 +50,29 @@ def mask_ok(mask, box, min_fill=0.03, max_fill=0.9, max_spill=0.25, grow=0.1):
     return bool(min_fill <= fill <= max_fill and spill <= max_spill)
 
 
-def mask_polygon(mask, epsilon=0.002):
-    """Outline of the biggest piece of `mask` as an (n, 2) array of x, y in 0..1, or None."""
+def mask_polygon(mask, epsilon=0.002, min_piece=0.1):
+    """Outline of `mask` as one (n, 2) array of x, y in 0..1, or None.
+
+    A limb cut in two (e.g. the face in front of the arm) gives several pieces: every piece at
+    least `min_piece` of the biggest one is kept, joined by thin lines into one outline (the way
+    Ultralytics converts COCO masks). Smaller specks are dropped.
+    """
+    from ultralytics.data.converter import merge_multi_segment
+
     h, w = mask.shape
     contours, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
         return None
-    c = max(contours, key=cv2.contourArea)
-    c = cv2.approxPolyDP(c, epsilon * cv2.arcLength(c, True), True).reshape(-1, 2).astype(float)
-    if len(c) < 3:
+    biggest = max(cv2.contourArea(c) for c in contours)
+    pieces = []
+    for c in sorted(contours, key=lambda c: c[:, 0, 0].min()):  # left to right
+        if cv2.contourArea(c) >= min_piece * biggest:
+            c = cv2.approxPolyDP(c, epsilon * cv2.arcLength(c, True), True).reshape(-1, 2)
+            if len(c) >= 3:
+                pieces.append(c.astype(float))
+    if not pieces:
         return None
+    c = np.concatenate(merge_multi_segment(pieces)) if len(pieces) > 1 else pieces[0]
     c[:, 0] /= w
     c[:, 1] /= h
     return np.clip(c, 0, 1)
@@ -113,7 +127,7 @@ def outline_frames(frames, cache_file):
         im = cv2.imread(str(img_path))
         h, w = im.shape[:2]
         boxes = boxes_of(result, w, h)
-        key = json.dumps([[c, [round(v, 1) for v in b]] for c, b in boxes])
+        key = json.dumps([OUTLINE_VERSION, [[c, [round(v, 1) for v in b]] for c, b in boxes]])
         if name in cache and cache[name]["key"] == key:
             continue
         limbs = []
