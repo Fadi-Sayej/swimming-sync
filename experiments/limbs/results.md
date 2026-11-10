@@ -72,3 +72,36 @@ yolo detect train data=data/raw/datasets/m2_2cls/data.yaml model=yolo11s.pt imgs
 Water colour alone is not what separates the pools; the rest of the look (camera height and
 angle, lighting, reflections, water texture, swimsuits) matters too. More pools in the training
 data remains the main fix.
+
+## Batch 2: more pools in training, 2026-11-10
+
+Added 141 labeled frames from 4 new pools (Fukuoka 2023, Markham 2025, Rome 2022, Funchal 2025;
+see docs/videos.md): train 296 (184 Budapest + 112 new) + val 76. Same settings
+(`scripts/train_limbs.sh`, ~30 s per round, ~50 min per version). Batch-1 models kept as
+`*_batch1`. "Training pool" = the 47 Budapest val frames only, so it is the same set for both.
+
+mAP50, 2 classes:
+
+| | Batch 1 (1 pool) | **Batch 2 (5 pools)** |
+|---|---|---|
+| Training pool (Budapest val) | 0.55 | 0.60 |
+| Budapest 2024 test | 0.47 | 0.46 |
+| **New pools (Doha + Paris)** | **0.23** | **0.40** |
+| New pools: leg | 0.37 | **0.56** |
+| New pools: arm | 0.09 | **0.24** |
+| Doha 2024 | 0.25 | 0.40 (leg 0.66) |
+| Paris 2025 | 0.20 | 0.28 |
+| Paris 2026 | 0.29 | 0.60 (leg 0.76) |
+
+4 classes: new pools 0.09 -> 0.24, training pool 0.34 -> 0.46. Side correct on new pools:
+legs 27 of 54 (50%, still a coin flip), arms 23 of 33 (70%).
+
+**Reading:**
+- More pools is the fix: new-pool mAP50 up from 0.23 to 0.40 with 112 extra frames, and the
+  training pool didn't get worse (0.55 -> 0.60).
+- Doha's legs gain may be helped by a swimmer overlap: Platanioti (the Doha test swimmer)
+  probably also swims in the Fukuoka final used for training. Paris 2026 has no overlap and
+  gained the most (0.29 -> 0.60).
+- Arms are still weak (0.24), and legs' left/right from the detector is still a coin flip on new
+  pools, so the sides should come from the pose model.
+- One training run per setting and 72 test frames: differences under ~0.05 are noise.
