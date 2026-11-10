@@ -75,3 +75,17 @@ python -m swimsync.dataset.labelstudio   # in another: creates both projects, im
 `credentials.txt` has 4 lines: `url: http://localhost:8080`, `email: ...`, `password: ...`,
 `api_token: <40 hex characters>`. Don't run `label-studio --version`: in 1.23 it starts a
 second server that blocks port 8080 (see docs/problems.md #15).
+
+## Reviewing limb outlines (step 4, segmentation)
+
+`python -m swimsync.dataset.limb_masks` lets SAM 2 outline the leg or arm inside every labeled
+box (no drawing). Only the **test** outlines are reviewed, because they give the score; the
+training outlines are used as they are.
+
+Project **M2 limb outlines - test** (95 frames). For each frame:
+- **All outlines right** (each covers its leg/arm, roughly to the edges): **Submit**.
+  Small wobbles at the edges are fine.
+- **Any outline wrong** (covers water, misses most of the limb, wrong limb, a limb without an
+  outline): **Skip** the frame. Don't fix outlines by hand; it's not worth the time.
+
+Then run `python -m swimsync.dataset.limb_masks` again: the submitted frames become the test set.

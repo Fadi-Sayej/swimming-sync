@@ -121,6 +121,13 @@ python -m swimsync.dataset.export_yolo   # data/raw/datasets/m2_4cls and m2_2cls
 scripts/train_limbs.sh                   # YOLO11s, both versions; DEVICE=0 on the college GPU
 ```
 
+Leg/arm outlines (segmentation) from the same boxes, with SAM 2 (no drawing):
+
+```bash
+python -m swimsync.dataset.limb_masks    # outlines + data/raw/datasets/m2_seg; test outlines go to Label Studio for review
+scripts/train_limbs.sh seg               # YOLO11s-seg
+```
+
 ## Tests
 
 ```bash
