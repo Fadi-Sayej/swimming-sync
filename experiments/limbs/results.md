@@ -105,3 +105,46 @@ legs 27 of 54 (50%, still a coin flip), arms 23 of 33 (70%).
 - Arms are still weak (0.24), and legs' left/right from the detector is still a coin flip on new
   pools, so the sides should come from the pose model.
 - One training run per setting and 72 test frames: differences under ~0.05 are noise.
+
+## Step 4: leg/arm outlines (YOLO11s-seg), 2026-11-10
+
+SAM 2.1 outlined every labeled box (867 limbs, none failed the automatic check), so the
+training outlines cost no labeling. YOLO11s-seg trained on them with the same settings and split
+(`scripts/train_limbs.sh seg`, 100 rounds, ~68 min; still improving at round 100).
+
+**Outline score (mask mAP50):**
+
+| | Frames | Mask mAP50 | Leg | Arm |
+|---|---|---|---|---|
+| Val (all pools) | 76 | 0.62 | 0.62 | 0.61 |
+| **New pools (Doha + Paris)** | 41 | **0.62** | 0.69 | 0.55 |
+| Budapest 2024 | 15 | 0.87 | 0.99 | 0.75 |
+
+Test = the reviewed test frames: 56 of 95 accepted, 39 skipped (an outline wrong or missing;
+Doha 13 of 24 skipped, the others 8-9 each). **The test score is optimistic**: the skipped frames
+are the harder ones (the detector's box mAP50 on new pools is 0.41 on the accepted frames vs
+0.33 on the skipped), and the outlines are scored against SAM's outlines, which is what the
+model learned to copy. So read 0.62 as "copies SAM well on new pools where SAM works", not as
+"outlines 62% right on any frame".
+
+**Boxes, compared fairly.** The seg model's own box score is measured against boxes around the
+SAM outlines, not the hand-drawn boxes, so it can't be compared with the detector directly.
+`experiments/limbs/box_vs_hand.py` scores both models against the same hand-drawn boxes
+(box mAP50; this scorer is simpler than Ultralytics', so the detector reads 0.36 here vs 0.40
+in the table above):
+
+| | Detector (batch 2) | Outline model | Leg (det / seg) | Arm (det / seg) |
+|---|---|---|---|---|
+| Val (76 frames, all pools) | 0.50 | **0.56** | 0.63 / 0.62 | 0.37 / **0.50** |
+| **New pools (Doha + Paris)** | 0.36 | **0.41** | 0.49 / 0.51 | 0.24 / **0.30** |
+| Budapest 2024 test | 0.49 | **0.55** | 0.70 / 0.74 | 0.29 / **0.36** |
+
+**Reading:**
+- The outline model finds limbs a little better than the detector on all three sets (+0.05 to
+  +0.06), mostly arms. One run each, so this is near the noise level (~0.05), but it points the
+  same way on every set.
+- A likely reason: SAM's outlines are more consistent than hand-drawn box edges, so the model
+  learns a cleaner target. Same labeling time, a bit better boxes, plus outlines.
+- On the accepted test frames only, the gap is bigger: new pools 0.47 vs 0.41, Budapest 0.72
+  vs 0.59 (outline model vs detector, boxes vs hand-drawn boxes). On the skipped (hard) frames
+  they are equal (0.32 vs 0.33).

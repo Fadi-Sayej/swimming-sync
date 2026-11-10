@@ -106,6 +106,11 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 - **Why:** Newer Ultralytics puts relative `project` paths inside `runs/<task>/`.
 - **Fix:** Moved the results; `scripts/train_limbs.sh` now passes an absolute path.
 
+### 20. Outline model's box score not comparable with the detector's (2026-11-10)
+- **Problem:** The seg model's box mAP50 (val 0.63) looked much better than the detector's (0.49).
+- **Why:** YOLO-seg scores its boxes against boxes around the SAM outlines, which are tighter than the hand-drawn boxes the detector is scored on.
+- **Fix:** `experiments/limbs/box_vs_hand.py` scores both against the hand-drawn boxes. Real gap: 0.56 vs 0.50 on val, 0.41 vs 0.36 on new pools.
+
 ## Still open
 
 ### 7. Pose model misses the swimmer underwater
@@ -126,3 +131,8 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 - **Tried:** Stronger colour augmentation (hue/saturation/brightness) to imitate other water colours: new pools 0.21 vs 0.23, no gain. Colour alone isn't the gap.
 - **Fix (partial, 2026-11-10):** Labeled 141 frames from 4 more pools (Fukuoka, Markham, Rome, Funchal). New pools: 0.23 -> 0.40 (legs 0.37 -> 0.56, arms 0.09 -> 0.24); Budapest pool unchanged or better.
 - **Still open:** Arms stay weak (0.24) and legs' left/right is still a coin flip on new pools. Details: `experiments/limbs/results.md`.
+
+### 21. A limb cut in two keeps only its biggest piece (2026-11-10)
+- **Problem:** When something covers the middle of a limb (e.g. the face in front of an arm), SAM's outline comes in two pieces and `mask_polygon` keeps only the bigger one, so the hand is left out.
+- **How often:** 29 of 867 limbs (3%), 4 of them in the test frames.
+- **For now:** the review skips those test frames. Fix before the next training run: keep every piece (Ultralytics can join pieces into one outline).
