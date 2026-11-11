@@ -256,3 +256,36 @@ Boxes vs the hand-drawn boxes (`box_vs_hand.py`, all 95 test frames), all four m
   Budapest *boxes* went up (0.55 -> 0.57). Watch it, not acted on.
 - Doha stays ~0.33 for every model: its through-the-wall shots need their own training frames
   (or are out of scope; to ask Assaf).
+
+## Step 3: left/right from the pose model inside the boxes, 2026-11-11
+
+`python experiments/limbs/sides_eval.py` (code: `src/swimsync/limbs/sides.py`). Each leg/arm box
+takes the pose skeleton limb (yolo11m-pose, COCO) that overlaps it most; two leg boxes always get
+one left and one right. Truth: the hand-drawn 4-class test labels. "Decided" = boxes a skeleton
+limb overlapped. Side right, % of decided:
+
+| New pools (72 frames) | Arms | Legs |
+|---|---|---|
+| Your boxes, pose on the full frame | **79%** (31/39) | 41% (16/39) |
+| Your boxes, pose zoomed on the swimmer | 66% (21/32) | 75% (30/40) |
+| Outline model's boxes, full frame | **80%** (16/20) | 36% (10/28) |
+| Outline model's boxes, zoomed | 88% (14/16) | 42% (11/26) |
+| 4-class detector (batch 3), for comparison | 62% (8/13) | 50% (25/50) |
+
+Budapest 2024 (23 frames): arms 89% (8/9) full frame; legs 35% full frame, 57% zoomed.
+
+Also tried running the pose upside down (image rotated 180 degrees, which keeps her own left/right;
+all 95 frames, your boxes): legs 49% (full frame) and 35% (zoomed), or 42% / 50% taking whichever
+way up matches the boxes better. No help.
+
+**Reading:**
+- **Arms: the pose model gives the side, ~80% right** (full frame), better than the 4-class
+  detector (62%) and on more arms. Use it for arm sides.
+- **Legs: no better than a coin flip, often worse.** Looking at the wrong ones: most leg frames
+  show only the legs (verticals, splits, legs out of the water). With no torso or face, the pose
+  model invents a body and often puts both its left and right leg on the same real leg. The
+  one 75% result (your boxes, zoomed) doesn't hold with the model's boxes (42%).
+- Leg sides need something that sees more than one frame (follow the legs from a moment where
+  the body is visible) or a model trained for it (keypoint labels on leg crops). To discuss with
+  Assaf on Nov 24.
+- The joints themselves can't be scored yet: there are no hand-labeled keypoints.

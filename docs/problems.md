@@ -133,6 +133,13 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 
 ## Still open
 
+### 25. Pose model's left/right for legs is a coin flip on legs-only frames (2026-11-11)
+- **Problem:** Taking each leg box's side from the pose skeleton (step 3) is right 36-42% of the time on new pools (arms: ~80%).
+- **Why:** Most leg frames show only the legs (verticals, splits). The COCO pose model needs the torso and face to know left from right; without them it invents a body and often puts both its left and right leg on the same real leg.
+- **Tried:** Zooming on the swimmer (42% with model boxes) and running the pose upside down (35-50%). No help.
+- **Next:** Arm sides from the pose model. Leg sides need more than one frame (follow the legs from when the body is visible) or keypoint labels on leg crops; to discuss with Assaf.
+
+
 ### 7. Pose model misses the swimmer underwater
 - **Problem:** Swimmer found in only 74% of frames, mostly missed when fully underwater.
 - **Impact:** This is the main problem the project is meant to solve (fine-tuning pose models for the pool).

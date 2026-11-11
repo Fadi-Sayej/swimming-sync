@@ -136,6 +136,13 @@ python -m swimsync.dataset.pick_frames --train data/raw/train3/*.mp4 --split tra
 python -m swimsync.dataset.labelstudio train3   # project "M2 legs+arms - train3"
 ```
 
+Pose inside the boxes (step 3): left/right and joints per leg/arm box from the pose model,
+scored against the 4-class test labels:
+
+```bash
+python experiments/limbs/sides_eval.py
+```
+
 ## Tests
 
 ```bash
