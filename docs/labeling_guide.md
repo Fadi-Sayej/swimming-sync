@@ -91,3 +91,11 @@ Project **M2 limb outlines - test** (95 frames). For each frame:
   outline): **Skip** the frame. Don't fix outlines by hand; it's not worth the time.
 
 Then run `python -m swimsync.dataset.limb_masks` again: the submitted frames become the test set.
+
+## Rechecking leg sides
+
+`python experiments/limbs/recheck_sides.py create` makes the project **M2 leg sides - recheck**:
+30 test frames with both legs already boxed as `leg?`. For each box, press **1** (her own left)
+or **2** (her own right) after clicking it; don't move the boxes. Can't tell? Leave it as `leg?`.
+Don't look at the old labels. Then `python experiments/limbs/recheck_sides.py score` shows how
+often the side matches the first labeling.

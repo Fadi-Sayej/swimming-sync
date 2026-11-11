@@ -314,3 +314,10 @@ their test images.
 - Open question for Assaf: how sure are the leg labels themselves (hard to see while labeling),
   and do we need her own left/right for legs, or is "leg 1 / leg 2" (or image left/right) enough
   for the sync score?
+
+### How sure are the leg labels? (2026-11-11)
+
+`experiments/limbs/recheck_sides.py`: 30 test frames (all 4 test videos), both legs pre-boxed as
+"leg?", sides relabeled without seeing the old ones. **58 of 60 leg sides the same as the first
+time (97%), none left unsure.** The labels are consistent, so leg sides are learnable: the ~50%
+of every model so far is the models' limit, not the labels'.

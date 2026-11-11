@@ -142,6 +142,9 @@ scored against the 4-class test labels:
 ```bash
 python experiments/limbs/sides_eval.py
 python experiments/limbs/track_eval.py   # legs followed through the video (~25 min first time)
+python experiments/limbs/recheck_sides.py create   # relabel 30 leg sides blind; then: score
+python -m swimsync.dataset.mirror        # 4-class set + mirrored copies with sides swapped
+scripts/train_limbs.sh 4cls_mirror
 ```
 
 ## Tests

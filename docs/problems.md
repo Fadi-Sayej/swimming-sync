@@ -141,6 +141,7 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 - **Problem:** Taking each leg box's side from the pose skeleton (step 3) is right 36-42% of the time on new pools (arms: ~80%).
 - **Why:** Most leg frames show only the legs (verticals, splits). The COCO pose model needs the torso and face to know left from right; without them it invents a body and often puts both its left and right leg on the same real leg.
 - **Tried:** Zooming on the swimmer (42% with model boxes) and running the pose upside down (35-50%). No help.
+- **Labels are fine (2026-11-11):** relabeling 30 test frames blind gave the same leg side 58 of 60 times (97%).
 - **Tried (2026-11-11):** Following the legs through the video from the nearest frame with the torso in view (`src/swimsync/limbs/track.py`): 48-50%. The pose model claims a confident torso on legs-only frames too, so those frames are no better.
 - **Next:** Arm sides from the pose model. For legs, ask Assaf: are her own left/right needed for the sync score, or is "leg 1 / leg 2" enough? If needed: check how consistent the leg labels are (relabel ~30 frames), then keypoint labels on leg crops.
 
