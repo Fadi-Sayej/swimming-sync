@@ -131,13 +131,18 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 - **Why:** It ran next to the box detector training. The seg model alone uses ~11 GB at 960 px; both together needed more than the Mac's 24 GB, so it swapped to disk.
 - **Fix:** Stopped the check run. One training at a time on the Mac (`scripts/train_limbs.sh` takes several versions and runs them one after another).
 
+### 26. The medium outline model doesn't fit in memory at batch 8 (2026-11-11)
+- **Problem:** YOLO11m-seg at 960 px with 8 images per step used ~20 GB and swapped; no step finished in 90 s.
+- **Fix:** `BATCH=4` (new option in `scripts/train_limbs.sh`, with `SIZE=m`): ~12 GB, ~2 min per round. Fewer images per step changes training a little, so the small model's runs (batch 8) aren't an exact like-for-like.
+
 ## Still open
 
 ### 25. Pose model's left/right for legs is a coin flip on legs-only frames (2026-11-11)
 - **Problem:** Taking each leg box's side from the pose skeleton (step 3) is right 36-42% of the time on new pools (arms: ~80%).
 - **Why:** Most leg frames show only the legs (verticals, splits). The COCO pose model needs the torso and face to know left from right; without them it invents a body and often puts both its left and right leg on the same real leg.
 - **Tried:** Zooming on the swimmer (42% with model boxes) and running the pose upside down (35-50%). No help.
-- **Next:** Arm sides from the pose model. Leg sides need more than one frame (follow the legs from when the body is visible) or keypoint labels on leg crops; to discuss with Assaf.
+- **Tried (2026-11-11):** Following the legs through the video from the nearest frame with the torso in view (`src/swimsync/limbs/track.py`): 48-50%. The pose model claims a confident torso on legs-only frames too, so those frames are no better.
+- **Next:** Arm sides from the pose model. For legs, ask Assaf: are her own left/right needed for the sync score, or is "leg 1 / leg 2" enough? If needed: check how consistent the leg labels are (relabel ~30 frames), then keypoint labels on leg crops.
 
 
 ### 7. Pose model misses the swimmer underwater

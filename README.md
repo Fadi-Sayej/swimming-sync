@@ -141,6 +141,7 @@ scored against the 4-class test labels:
 
 ```bash
 python experiments/limbs/sides_eval.py
+python experiments/limbs/track_eval.py   # legs followed through the video (~25 min first time)
 ```
 
 ## Tests

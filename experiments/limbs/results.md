@@ -289,3 +289,28 @@ way up matches the boxes better. No help.
   the body is visible) or a model trained for it (keypoint labels on leg crops). To discuss with
   Assaf on Nov 24.
 - The joints themselves can't be scored yet: there are no hand-labeled keypoints.
+
+### Leg sides by following the legs through the video, 2026-11-11
+
+`python experiments/limbs/track_eval.py` (code: `src/swimsync/limbs/track.py`). For each test
+frame, the 3 s of video before and after it: leg boxes from the batch-3 outline model, pose
+skeletons, camera cuts. The leg sides come from the nearest frame in the same shot where the pose
+model sees the torso (both shoulders and hips, confidence >= 0.5) and both legs are boxed, then
+the two leg boxes are followed frame by frame to the test frame. All 95 video frames matched
+their test images.
+
+| Legs, side right (% of decided) | New pools, your boxes | New pools, model boxes | Budapest, your boxes |
+|---|---|---|---|
+| Pose on the frame alone | 41% (16/39) | 36% (10/28) | 35% (8/23) |
+| Following the legs | 50% (34/68) | 48% (22/46) | 48% (14/29) |
+| Following, else pose | 51% (38/75) | 47% (24/51) | 42% (14/33) |
+
+**Reading:**
+- **No real gain: still a coin flip.** It decides more legs, but half of them wrong.
+- The "torso visible" frame was a median 0.4 s away: the pose model reports a confident torso even
+  on legs-only frames (it invents the body), so those frames aren't trustworthy either.
+- Only 3 test legs have the face and torso clearly in view, too few to check whether the pose
+  model and the labels agree when the whole body is visible.
+- Open question for Assaf: how sure are the leg labels themselves (hard to see while labeling),
+  and do we need her own left/right for legs, or is "leg 1 / leg 2" (or image left/right) enough
+  for the sync score?
