@@ -121,6 +121,16 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 - **Why:** The test misses are close-ups of arms at the surface (Paris). The training videos are TV broadcasts with few close-ups, so there is nothing like them to pick. "Missed" also fired on 75% of frames, because pose boxes and detector boxes rarely line up on small limbs.
 - **Fix:** Dropped the picker and the 44 frames (never labeled). Downloaded 9 close-up solo videos from 5 new pools (Munich, Sweden, Delfin Cup, Singapore, Junior Worlds 2024) instead: `docs/videos.md`, batch 3.
 
+### 23. Training the outline model longer made it a bit worse (2026-11-11)
+- **Problem:** 200 rounds (with the #21 outlines) scored lower than the 100-round model: boxes vs hand boxes on new pools 0.34 vs 0.41, Budapest arm outlines 0.25 vs 0.75. Training stopped itself at round 129.
+- **Why:** The 100-round model's best round was 78, so it had already stopped improving; more rounds only add noise. Not yet known whether the #21 outline change also played a part.
+- **Result (2026-11-11):** The check run (`seg_fix21`) was stopped (#24). The batch-3 outline model (100 rounds, #21 outlines) is the best model on new pools, so longer training was the problem, not #21. One open doubt: both #21 runs drop Budapest arm outlines (0.75 -> 0.49 / 0.25), on ~12 arms.
+
+### 24. Two trainings at once: the outline model nearly froze (2026-11-11)
+- **Problem:** The outline check run (`seg_fix21`) went from ~40 s per round to over a minute per *step* and stalled at round 37 after 2 hours.
+- **Why:** It ran next to the box detector training. The seg model alone uses ~11 GB at 960 px; both together needed more than the Mac's 24 GB, so it swapped to disk.
+- **Fix:** Stopped the check run. One training at a time on the Mac (`scripts/train_limbs.sh` takes several versions and runs them one after another).
+
 ## Still open
 
 ### 7. Pose model misses the swimmer underwater
@@ -141,4 +151,6 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 - **Tried:** Stronger colour augmentation (hue/saturation/brightness) to imitate other water colours: new pools 0.21 vs 0.23, no gain. Colour alone isn't the gap.
 - **Fix (partial, 2026-11-10):** Labeled 141 frames from 4 more pools (Fukuoka, Markham, Rome, Funchal). New pools: 0.23 -> 0.40 (legs 0.37 -> 0.56, arms 0.09 -> 0.24); Budapest pool unchanged or better.
 - **Still open:** Arms stay weak (0.24) and legs' left/right is still a coin flip on new pools. Details: `experiments/limbs/results.md`.
+- **Tried (2026-11-11):** Outline model trained 200 rounds: no gain (new pools boxes 0.34 vs 0.41), see #23.
+- **Fix (partial, 2026-11-11):** Batch 3, 114 close-up frames from 5 more pools. Best model is now the outline model: boxes on new pools 0.45 (first detector 0.36, batch-2 detector 0.40 by Ultralytics' scorer); Paris 2025 0.28 -> 0.47 (detector). Doha stays ~0.33 (through-the-wall shots).
 - **Diagnosis (2026-11-10):** mostly missed limbs, not loose boxes (62% of arms missed). Half of Doha's limbs are in underwater-window and very wide shots, which training doesn't have (2 of 27 found). Paris 2025 misses arms at the surface near the face/body. Both models were still improving at round 100.

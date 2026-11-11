@@ -168,3 +168,91 @@ Detector (batch 2), new-pool test frames, boxes with confidence >= 0.25:
   score.
 - **Both models were still improving at round 100** (detector val 0.485 -> 0.500 over the last
   5 rounds), so training longer is a free try.
+
+## Outline model, 200 rounds + split-limb fix (#21), 2026-11-11
+
+`EPOCHS=200 NAME_SUFFIX=_200ep scripts/train_limbs.sh seg`. Stopped early at round 129 (no val
+gain for 30 rounds); best round 104. Same frames as the 100-round model, outlines redone with the
+#21 fix (29 limbs changed).
+
+| | 100 rounds | 200 rounds + #21 |
+|---|---|---|
+| Outline mAP50, val | 0.64 | 0.62 |
+| Outline mAP50, new pools (41 frames) | 0.62 (leg 0.69, arm 0.55) | 0.62 (leg 0.71, arm 0.53) |
+| Outline mAP50, Budapest (15 frames) | 0.87 (leg 0.99, arm 0.75) | 0.61 (leg 0.97, arm 0.25) |
+| Boxes vs hand boxes, val | 0.56 | 0.50 |
+| Boxes vs hand boxes, new pools | 0.41 | 0.34 |
+| Boxes vs hand boxes, Budapest | 0.55 | 0.49 |
+
+- **No gain, a bit worse.** Training longer doesn't help: the val best came at round 104 and the
+  rest was flat. The 100-round model's best was at round 78, so "still improving at round 100"
+  was true for the detector, not the outline model.
+- The Budapest drop is mostly arms on 15 frames (28 limbs), so a few limbs swing it a lot.
+- Two things changed at once (rounds and #21). A 100-round run on the #21 outlines
+  (`seg_fix21`) separates them.
+- The 100-round model (`output/seg`) stays the one we use.
+
+## Batch 3: close-ups from 5 more pools, 2026-11-11
+
+Added 114 labeled frames (of 132) from 9 close-up solo videos: Munich, Sweden, Delfin Cup,
+Singapore 2025, Junior Worlds 2024 (`docs/videos.md`). 108 legs, 85 arms. Train 387 + val 99
+(the old frames keep their split). Same settings; batch-2 models kept, new ones are `*_b3`.
+Same Ultralytics scorer as the batch 2 table (the batch-2 numbers below re-run, they match).
+
+mAP50, 2 classes:
+
+| | Batch 2 (5 pools) | **Batch 3 (10 pools)** |
+|---|---|---|
+| Training pool (Budapest val, 47 frames) | 0.60 | 0.61 |
+| Budapest 2024 test | 0.46 | **0.53** |
+| **New pools (Doha + Paris)** | **0.40** | **0.41** |
+| New pools: leg | 0.56 | 0.59 |
+| New pools: arm | 0.24 | 0.23 |
+| Doha 2024 | 0.40 (leg 0.66, arm 0.14) | 0.32 (leg 0.43, arm 0.21) |
+| **Paris 2025** | 0.28 (leg 0.35, arm 0.22) | **0.47** (leg 0.61, arm 0.32) |
+| Paris 2026 | 0.60 (leg 0.76, arm 0.43) | 0.55 (leg 0.80, arm 0.30) |
+
+4 classes: new pools 0.24 -> 0.26, Budapest 2024 0.23 -> 0.43. Side right when the 4-class
+model finds the limb (confidence >= 0.25, IoU >= 0.5), new pools: legs 22/42 -> 25/50 (still a
+coin flip), arms 12/16 -> 8/13.
+
+**Reading:**
+- **The close-ups fixed what they were meant to fix:** Paris 2025, the close-up pool, 0.28 -> 0.47.
+- **Overall new pools flat** (0.40 -> 0.41): Doha and Paris 2026's arms dropped by about as much.
+  Doha's legs drop may partly undo the swimmer-overlap boost noted in batch 2 (Platanioti in
+  the Fukuoka training video), now a smaller share of training.
+- Arms are still the weak part (0.23), and the detector's left/right for legs is still a coin
+  flip, so the sides should come from the pose model (step 3).
+- ~25 frames per pool: changes under ~0.05 overall, or ~0.1 for one pool, are noise.
+
+### Outline model with batch 3 (`seg_b3`, 100 rounds, #21 outlines)
+
+1060 limbs outlined by SAM, none failed the check. Best val round 77. Test outlines are the same
+56 reviewed frames as before (41 new pools, 15 Budapest).
+
+| | Outline model, batch 2 | **Outline model, batch 3** |
+|---|---|---|
+| Outline mAP50, new pools | 0.62 (leg 0.69, arm 0.55) | **0.70** (leg 0.75, arm 0.65) |
+| Outline mAP50, Budapest 2024 | 0.87 (leg 0.99, arm 0.75) | 0.73 (leg 0.98, arm 0.49) |
+
+Boxes vs the hand-drawn boxes (`box_vs_hand.py`, all 95 test frames), all four models:
+
+| | Detector b2 | Detector b3 | Outline b2 | **Outline b3** |
+|---|---|---|---|---|
+| **New pools** | 0.36 | 0.39 | 0.41 | **0.45** |
+| New pools: leg | 0.49 | 0.59 | 0.51 | 0.60 |
+| New pools: arm | 0.24 | 0.18 | 0.30 | 0.30 |
+| Doha 2024 | 0.37 | 0.32 | 0.32 | 0.33 |
+| Paris 2025 | 0.29 | 0.41 | 0.44 | 0.47 |
+| Paris 2026 | 0.53 | 0.52 | 0.55 | **0.65** |
+| Budapest 2024 | 0.49 | 0.53 | 0.55 | 0.57 |
+
+**Reading:**
+- **The batch-3 outline model is the best leg/arm box finder so far:** new pools 0.36 (first
+  detector) -> 0.45, with outlines as a bonus (0.70 on new pools). It is the model to use.
+- Its arms hold at 0.30 where the batch-3 detector's dropped to 0.18: the outline target helps arms.
+- Budapest arm outlines dropped (0.75 -> 0.49), as in the 200-round run, also on #21 outlines.
+  Both runs used the #21 fix, so it may be the cause; but it is ~12 arms on 15 frames, and the
+  Budapest *boxes* went up (0.55 -> 0.57). Watch it, not acted on.
+- Doha stays ~0.33 for every model: its through-the-wall shots need their own training frames
+  (or are out of scope; to ask Assaf).
