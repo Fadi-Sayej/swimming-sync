@@ -99,3 +99,37 @@ Then run `python -m swimsync.dataset.limb_masks` again: the submitted frames bec
 or **2** (her own right) after clicking it; don't move the boxes. Can't tell? Leave it as `leg?`.
 Don't look at the old labels. Then `python experiments/limbs/recheck_sides.py score` shows how
 often the side matches the first labeling.
+
+## Keypoints (step 3, pose model training)
+
+Projects **M2 keypoints - train** (200 frames from every training pool) and **M2 keypoints -
+test** (88 test frames, never trained on). Made by `python -m swimsync.dataset.keypoints`.
+
+12 points, her **own** side: blue = left, orange = right.
+
+| Point | Left key | Right key |
+|-------|----------|-----------|
+| shoulder | q | w |
+| elbow | e | r |
+| wrist | t | y |
+| hip | a | s |
+| knee | d | f |
+| ankle | g | h |
+
+Each frame opens with:
+- **Thin boxes:** your earlier leg/arm labels. They're only a guide, so don't edit them.
+- **Pre-filled points:** from the pose model. Their sides already follow your boxes, and
+  points outside your boxes were removed.
+
+1. **Fix the pre-filled points:** drag a point that is off; delete one on the wrong limb.
+2. **Add missing points you can see:** press the key, then click. A joint seen through the water
+   counts.
+3. **Don't guess hidden joints.** In a vertical the hips are usually under water: leave them out.
+   A point you can't place within about a joint's width is better left out.
+4. **Knee and elbow** go at the centre of the bend; **ankle** at the ankle bone (not the toes);
+   **wrist** at the wrist (not the fingertips).
+5. **Can't tell her left from right?** Skip the frame.
+6. Submit, even if only one or two points are visible.
+
+About 1-2 minutes per frame. Label train first; test can come last, but it's needed for the score.
+

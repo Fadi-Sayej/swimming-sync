@@ -364,3 +364,19 @@ also mirrored, with left/right labels swapped (774 train images). The model can 
 - Leg sides stay open (#25). The labels are reliable (97%), so the next try is a pose model
   fine-tuned on swimmer keypoints (hips/knees/ankles with sides), to discuss with Assaf.
 
+### Both legs in one crop (quick test), 2026-11-13
+
+One crop around both hand-drawn leg boxes, a classifier (YOLO11s-cls, 256 px) asked "is the
+leg on the image's left her own left?". 171 training frames with both legs, plus mirrored copies
+with the answer flipped (so the camera side can't be learned). Not kept in the repo (quick test).
+
+| | Right |
+|---|---|
+| Val (during training) | 50-63%, no steady rise |
+| Test, new pools | 62% (23/37) |
+| Test, Budapest 2024 | 75% (12/16) |
+
+**Reading:** maybe a little better than a coin flip, but with 37 test frames 62% is within
+chance. Seeing both legs isn't enough with this little data; the keypoint-trained pose model is
+the next try.
+

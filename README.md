@@ -147,6 +147,13 @@ python -m swimsync.dataset.mirror        # 4-class set + mirrored copies with si
 scripts/train_limbs.sh 4cls_mirror
 ```
 
+Pose model trained on swimmers (step 3): label 12 keypoints per frame (sides pre-filled from
+your boxes), see `docs/labeling_guide.md`:
+
+```bash
+python -m swimsync.dataset.keypoints     # Label Studio projects "M2 keypoints - train" / "- test"
+```
+
 ## Tests
 
 ```bash
