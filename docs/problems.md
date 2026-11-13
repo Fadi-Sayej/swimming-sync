@@ -134,6 +134,7 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 ### 26. The medium outline model doesn't fit in memory at batch 8 (2026-11-11)
 - **Problem:** YOLO11m-seg at 960 px with 8 images per step used ~20 GB and swapped; no step finished in 90 s.
 - **Fix:** `BATCH=4` (new option in `scripts/train_limbs.sh`, with `SIZE=m`): ~12 GB, ~2 min per round. Fewer images per step changes training a little, so the small model's runs (batch 8) aren't an exact like-for-like.
+- **Result (2026-11-12):** The medium model scored lower than the small one (boxes on new pools 0.36 vs 0.45, outlines 0.58 vs 0.70). Too few training frames for a bigger model; the small model stays.
 
 ## Still open
 
@@ -143,7 +144,8 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 - **Tried:** Zooming on the swimmer (42% with model boxes) and running the pose upside down (35-50%). No help.
 - **Labels are fine (2026-11-11):** relabeling 30 test frames blind gave the same leg side 58 of 60 times (97%).
 - **Tried (2026-11-11):** Following the legs through the video from the nearest frame with the torso in view (`src/swimsync/limbs/track.py`): 48-50%. The pose model claims a confident torso on legs-only frames too, so those frames are no better.
-- **Next:** Arm sides from the pose model. For legs, ask Assaf: are her own left/right needed for the sync score, or is "leg 1 / leg 2" enough? If needed: check how consistent the leg labels are (relabel ~30 frames), then keypoint labels on leg crops.
+- **Tried (2026-11-12):** 4-class detector trained with mirrored copies (image flipped, left/right labels swapped), so it can't learn "her left leg is on the image's left": leg sides 44% on new pools (24/54; before 25/50), Budapest 40% (before 68%: the old model had learned the camera side there). It finds boxes better (4-class mAP50 0.26 -> 0.34) but still can't tell sides.
+- **Next:** Arm sides from the pose model. Leg sides are needed for the sync score and the labels are reliable, so the model needs to see more than one leg box: fine-tune the pose model on swimmer keypoints (hips, knees, ankles labeled with sides), to discuss with Assaf on Nov 24.
 
 
 ### 7. Pose model misses the swimmer underwater

@@ -51,7 +51,8 @@ for name, w in [("detector", "experiments/limbs/output/2cls/weights/best.pt"),
                 ("det_b3", "experiments/limbs/output/2cls_b3/weights/best.pt"),
                 ("seg", "experiments/limbs/output/seg/weights/best.pt"),
                 ("seg_200ep", "experiments/limbs/output/seg_200ep/weights/best.pt"),
-                ("seg_b3", "experiments/limbs/output/seg_b3/weights/best.pt")]:
+                ("seg_b3", "experiments/limbs/output/seg_b3/weights/best.pt"),
+                ("seg_m_b3", "experiments/limbs/output/seg_m_b3/weights/best.pt")]:
     for split in sys.argv[1:] or ["val"]:
         mean, per = score(w, split)
         print(f"{name:9s} {split:9s} box mAP50 vs hand boxes {mean:.3f}  (leg {per[0]:.3f}, arm {per[1]:.3f})")

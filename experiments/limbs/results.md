@@ -321,3 +321,46 @@ their test images.
 "leg?", sides relabeled without seeing the old ones. **58 of 60 leg sides the same as the first
 time (97%), none left unsure.** The labels are consistent, so leg sides are learnable: the ~50%
 of every model so far is the models' limit, not the labels'.
+
+## Medium outline model (YOLO11m-seg, batch 3), 2026-11-12
+
+Same data and settings as `seg_b3`, but the medium model (3x the size) and 4 images per step
+instead of 8 (memory, #26). 100 rounds, best val round 96 (val outlines 0.55 vs 0.63 for the small model).
+
+| | Small (`seg_b3`) | Medium (`seg_m_b3`) |
+|---|---|---|
+| Boxes vs hand boxes, new pools | **0.45** (leg 0.60, arm 0.30) | 0.36 (leg 0.53, arm 0.18) |
+| Doha 2024 | **0.33** | 0.28 |
+| Paris 2025 | **0.47** | 0.34 |
+| Paris 2026 | **0.65** | 0.57 |
+| Budapest 2024 | **0.57** | 0.45 |
+| Outline mAP50, new pools | **0.70** (leg 0.75, arm 0.65) | 0.58 (leg 0.69, arm 0.46) |
+| Outline mAP50, Budapest 2024 | **0.73** | 0.56 |
+
+**Reading:** the medium model is worse everywhere, mostly on arms. With ~390 training frames a
+bigger model has more to learn from too little data; it was also still improving at round 96, so
+it would need more rounds (~2 min each on the Mac). Not worth it: **the small model stays.**
+A bigger model is worth retrying only with more labeled frames, on the college GPU.
+
+## Mirrored 4-class detector (leg sides), 2026-11-12
+
+`python -m swimsync.dataset.mirror` then `scripts/train_limbs.sh 4cls_mirror`: every training frame
+also mirrored, with left/right labels swapped (774 train images). The model can no longer learn
+"her left leg is on the image's left", only her body. YOLO11s, 100 rounds, same test frames.
+
+| 4-class detector | Batch 3 | **Mirrored** |
+|---|---|---|
+| mAP50, new pools | 0.26 | **0.34** |
+| Doha 2024 / Paris 2025 / Paris 2026 | 0.25 / 0.25 / 0.40 | 0.30 / 0.34 / 0.46 |
+| Budapest 2024 | **0.43** | 0.39 |
+| Leg side right, new pools (found legs) | 50% (25/50) | 44% (24/54) |
+| Leg side right, Budapest | 68% (19/28) | 40% (12/30) |
+| Arm side right, new pools | 62% (8/13) | 47% (9/19) |
+
+**Reading:**
+- Mirroring helps *finding* the limbs (twice the training frames: new pools 0.26 -> 0.34), not their sides.
+- The old model's 68% on Budapest was the camera side, not her body: with that shortcut taken away
+  it drops to 40%. A box detector sees one leg at a time and can't tell her left from her right.
+- Leg sides stay open (#25). The labels are reliable (97%), so the next try is a pose model
+  fine-tuned on swimmer keypoints (hips/knees/ankles with sides), to discuss with Assaf.
+
