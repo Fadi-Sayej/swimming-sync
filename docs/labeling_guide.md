@@ -140,3 +140,27 @@ Each frame opens with:
 
 About 1-2 minutes per frame. Label train first; test can come last, but it's needed for the score.
 
+## Front / back of the legs (leg sides, #25)
+
+Projects **M2 front/back - train** (~1000 frames from the training videos) and **M2 front/back -
+test** (~150 frames from the test videos, never trained on). Made by
+`python -m swimsync.dataset.facing`. The two leg boxes found by the outline model are drawn
+faintly as a guide.
+
+One question per frame: **which way do her legs face?**
+
+| Key | Choice | What you see |
+|-----|--------|--------------|
+| 1 | front | kneecaps, tops of the feet, toes pointing toward you, the front of her swimsuit |
+| 2 | back | backs of the knees, heels, soles of the feet, buttocks |
+| 3 | can't tell | side view (one leg behind the other), too blurry, legs hidden, or not her legs |
+
+- Answer for **her body**, even when one leg is bent or turned a bit: in a split, which way does
+  her front face?
+- The boxes are only a guide: if they're wrong or on the wrong thing, still answer for her legs;
+  if you can't see her legs at all, choose can't tell.
+- Press the key, then Submit (Ctrl+Enter). About 3 seconds per frame.
+
+The model learns front/back; her left and right then follow from the direction toward her
+feet and where each leg is (`swimsync.dataset.facing`).
+
