@@ -380,3 +380,38 @@ with the answer flipped (so the camera side can't be learned). Not kept in the r
 chance. Seeing both legs isn't enough with this little data; the keypoint-trained pose model is
 the next try.
 
+## Step 3: pose model trained on swimmer keypoints, 2026-11-14
+
+Keypoint labels: 192 training frames (156 train + 36 val) and 87 test frames (`swimsync.dataset.keypoints`,
+12 points, sides pre-filled from the hand boxes and corrected by hand). Training set =
+crops around her leg/arm boxes (`swimsync.dataset.export_pose`), the same zoom the pose model
+gets at use time. YOLO11m-pose fine-tuned, 640 px, batch 8, mirroring on (left/right points swap).
+
+Two runs: Ultralytics' default rate (AdamW 0.002, `pose`) and 10x lower (0.0002, `pose_lr`,
+stopped itself at round 48). Test = 87 held-out frames, 342 labeled points:
+
+| | Ready-made yolo11m-pose | Trained (`pose`) | Trained, low rate (`pose_lr`) |
+|---|---|---|---|
+| Point within 10% of her size | **154** (45%) | 115 | 144 |
+| Point within 20% | **246** (72%) | 207 | 243 |
+| Point nearer the other side's label | **40%** (94/236) | 48% | 46% |
+| Pose mAP50 (Ultralytics, test) | **0.18** | 0.11 | 0.12 |
+| Box mAP50 (her limb region) | 0.63 | 0.86 | **0.87** |
+
+Sides on the 4-class test boxes (`sides_eval.py --pose`), new pools, % of decided:
+
+| | Ready-made | Trained, low rate |
+|---|---|---|
+| Legs, your boxes, full frame / zoom | 41% / 75%* | 52% / 41% |
+| Arms, your boxes, full frame / zoom | **79%** / 66% | 58% / 52% |
+
+\* 75% zoomed was 30 of 40 on an earlier run; the other ready-made leg numbers are 36-42%.
+
+**Reading:**
+- Training learned *where she is* (box 0.63 -> 0.87) but made the points slightly worse and the
+  sides no better. The default rate wiped the model's body knowledge at the start (pose 0 for
+  15 rounds); the low rate kept more but still didn't beat the ready-made model.
+- ~156 crops, ~4 points each, mostly legs-only frames, are too few to teach left/right from
+  the legs alone. The ready-made model stays for points and arm sides.
+- Leg sides stay open (#25).
+

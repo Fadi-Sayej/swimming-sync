@@ -152,6 +152,8 @@ your boxes), see `docs/labeling_guide.md`:
 
 ```bash
 python -m swimsync.dataset.keypoints     # Label Studio projects "M2 keypoints - train" / "- test"
+python -m swimsync.dataset.export_pose   # crops around her limbs + 17 points -> data/raw/datasets/m2_pose
+SIZE=m IMGSZ=640 BATCH=8 scripts/train_limbs.sh pose
 ```
 
 ## Tests

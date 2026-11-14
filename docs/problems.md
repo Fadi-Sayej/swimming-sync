@@ -136,6 +136,16 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 - **Fix:** `BATCH=4` (new option in `scripts/train_limbs.sh`, with `SIZE=m`): ~12 GB, ~2 min per round. Fewer images per step changes training a little, so the small model's runs (batch 8) aren't an exact like-for-like.
 - **Result (2026-11-12):** The medium model scored lower than the small one (boxes on new pools 0.36 vs 0.45, outlines 0.58 vs 0.70). Too few training frames for a bigger model; the small model stays.
 
+### 27. Stray keypoints from extra clicks (2026-11-14)
+- **Problem:** 8 of the 192 labeled keypoint frames had a point given twice (e.g. two left ankles); in most, the extra one sits out in the water, away from her.
+- **Why:** In Label Studio a point label stays selected after placing a point, so every later click on the image adds another point of that kind.
+- **Fix:** `swimsync.dataset.export_pose` leaves out any frame with a point given twice and lists it; those frames go back for fixing. A check for points far outside their limb's box flagged 2 more frames to look at. Tip added to the labeling guide.
+
+### 28. Pose training at 16 images per step slowed to a crawl (2026-11-14)
+- **Problem:** YOLO11m-pose (640 px, batch 16) went from ~2 s to 15-20 s per step by round 11; the Mac was using 13.7 GB of swap.
+- **Why:** The training alone took ~16.5 GB, too much next to Label Studio, the browser and the editor on a 24 GB Mac (same as #26).
+- **Fix:** Stopped it; `BATCH=8`: 9.6 GB, ~30 s per round.
+
 ## Still open
 
 ### 25. Pose model's left/right for legs is a coin flip on legs-only frames (2026-11-11)
@@ -146,6 +156,7 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 - **Tried (2026-11-11):** Following the legs through the video from the nearest frame with the torso in view (`src/swimsync/limbs/track.py`): 48-50%. The pose model claims a confident torso on legs-only frames too, so those frames are no better.
 - **Tried (2026-11-12):** 4-class detector trained with mirrored copies (image flipped, left/right labels swapped), so it can't learn "her left leg is on the image's left": leg sides 44% on new pools (24/54; before 25/50), Budapest 40% (before 68%: the old model had learned the camera side there). It finds boxes better (4-class mAP50 0.26 -> 0.34) but still can't tell sides.
 - **Tried (2026-11-13, quick test):** A classifier (YOLO11s-cls) on one crop around both legs, asked "is the image-left leg her left?", trained with mirrored copies (answer flipped): val 50-63% over training, test new pools 62% (23/37), Budapest 75% (12/16). On so few frames that is not clearly better than a coin flip.
+- **Tried (2026-11-14):** Pose model fine-tuned on 192 keypoint-labeled frames (sides from the hand boxes): leg sides 41-52% on new pools, arm sides down from ~80% to 52-58%, points slightly worse than the ready-made model. Too few labels to learn sides from legs alone.
 - **Next:** Arm sides from the pose model. Leg sides are needed for the sync score and the labels are reliable, so the model needs to see more than one leg box: fine-tune the pose model on swimmer keypoints (hips, knees, ankles labeled with sides), to discuss with Assaf on Nov 24.
 
 

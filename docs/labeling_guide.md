@@ -128,8 +128,15 @@ Each frame opens with:
    A point you can't place within about a joint's width is better left out.
 4. **Knee and elbow** go at the centre of the bend; **ankle** at the ankle bone (not the toes);
    **wrist** at the wrist (not the fingertips).
-5. **Can't tell her left from right?** Skip the frame.
-6. Submit, even if only one or two points are visible.
+5. **Seen from behind or the side still counts.** If you see the back of the knee (or the
+   side of it), put the knee point at the middle of the leg where thigh meets shin. Same for
+   elbows. A joint is "hidden" only when that part of the limb isn't in view: under water you
+   can't see through, behind the other leg or her body, or out of the frame.
+6. **Can't tell her left from right?** Skip the frame.
+7. Submit, even if only one or two points are visible.
+8. **Watch for extra points.** A point label stays selected after you place a point, so every
+   later click on the image adds another one. Before Submit, check the list on the right has
+   each point at most once.
 
 About 1-2 minutes per frame. Label train first; test can come last, but it's needed for the score.
 
