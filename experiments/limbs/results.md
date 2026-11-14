@@ -380,6 +380,12 @@ with the answer flipped (so the camera side can't be learned). Not kept in the r
 chance. Seeing both legs isn't enough with this little data; the keypoint-trained pose model is
 the next try.
 
+**Sharper crops (2026-11-14):** the labeler decides leg sides from the toes (which way they
+point), the inside of the foot (big-toe side faces the other foot) and whether the kneecaps or
+the backs of the knees face the camera: small details, ~30 px at 256. Same test at 512 px:
+val 47-58%, test new pools 54% (20/37), Budapest 44% (7/16). No better: the detail is there now,
+so ~170 training frames are the limit, not the resolution.
+
 ## Step 3: pose model trained on swimmer keypoints, 2026-11-14
 
 Keypoint labels: 192 training frames (156 train + 36 val) and 87 test frames (`swimsync.dataset.keypoints`,
@@ -414,4 +420,33 @@ Sides on the 4-class test boxes (`sides_eval.py --pose`), new pools, % of decide
 - ~156 crops, ~4 points each, mostly legs-only frames, are too few to teach left/right from
   the legs alone. The ready-made model stays for points and arm sides.
 - Leg sides stay open (#25).
+
+## Leg sides: why the models can't learn them, 2026-11-14
+
+Two more quick tests (code not kept; scratch scripts):
+
+| Test | Training frames | Test, new pools | Budapest |
+|---|---|---|---|
+| Both-legs classifier, 512 px, + nearby video frames (0.1-0.5 s, sides carried over by box overlap) | 171 + 596 nearby | 54% (20/37) | 31% (5/16) |
+| Front/back classifier (see below) | 88 | 15/32 | 4/12 |
+
+**Why the "her left or right?" question fails:** it is the one question whose answer flips when the
+image is mirrored. Ready-made image models are pretrained with mirrored images, so they see an
+image and its mirror as nearly the same; with mirrored copies in training (needed so the
+camera side can't be learned) the training loss stayed at 0.693, a coin flip, even on the training
+images (512 px and nearby-frame runs). More frames of the same question don't help.
+
+**Front/back instead:** the labeler decides sides from the toes, the inside of the foot and
+whether the kneecaps or the backs of the knees face the camera, i.e. whether the legs face the
+camera. Front/back doesn't change in a mirror, so a ready-made model can learn it, and the sides
+follow by geometry: front/back + the direction toward her feet (knee -> ankle; the pose model's
+points give it without needing sides) + where each box is. Front/back labels came from the keypoint
+frames (sides + knee/ankle points) at no labeling cost; checked by eye ("back" crops show
+the buttocks or the soles). The classifier learned its training frames (loss 0.72 -> 0.43, val
+80% of 15) but scored 43% on test (19/44): 88 training frames are too few.
+
+**Next (if leg sides are worth it):** front/back is a one-click label (front / back / can't
+tell), ~3 s per frame instead of ~1-2 min for keypoints, so ~1000 frames from the training
+videos is about an hour of labeling. That is the cheapest way to more data for a question the
+models can learn.
 
