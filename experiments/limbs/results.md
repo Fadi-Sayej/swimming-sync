@@ -516,3 +516,29 @@ boxes by position loses which leg is which. A majority vote of all sure frames i
 With the outline model's boxes at 0.1 s: 6 of 7. **Leg sides: ~92% right on ~23% of the frames;
 the rest stay unknown.**
 
+## Arm boxes: pose points and zoom don't help, 2026-11-21
+
+Quick tests (code not kept; scratch scripts), arm AP50 against the hand-drawn arm boxes, same
+matching as `box_vs_hand.py`:
+
+| Arm boxes from | Val | New pools | Budapest |
+|---|---|---|---|
+| **Outline model (seg_b3)** | **0.51** | **0.30** | **0.35** |
+| Pose model points (shoulder-elbow-wrist + hand), full frame / zoomed / both | 0.35-0.39 | 0.15-0.19 | 0.05-0.08 |
+| Outline + pose (merged) | 0.53-0.55 | 0.31 | 0.24-0.27 |
+| Outline model at 1280 px | 0.44 | 0.28 | 0.25 |
+| Outline model zoomed on her (alone / merged) | 0.43 / 0.51 | 0.23 / 0.24 | 0.24 / 0.30 |
+
+**Why arms are missed** (outline model, new pools, a model box with confidence >= 0.1):
+
+| | Arms | Overlap >= 0.5 | Overlap >= 0.3 |
+|---|---|---|---|
+| Paris 2025 + 2026 | 31 | 17 | 25 (81%) |
+| Doha | 22 | 8 | 12 |
+| (legs, Paris) | 46 | 36 | 41 |
+
+- Paris: the model finds most arms; its boxes and the hand boxes disagree on how much of an arm in
+  splash or half under water to include.
+- Doha: most misses are through-the-wall shots (her under water, seen through the pool wall);
+  training has almost none. Only labeled frames of that kind would help.
+
