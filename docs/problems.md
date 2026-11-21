@@ -153,6 +153,11 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 
 ## Still open
 
+### 30. Color rules can't find splash or keep banners out of the water (2026-11-21)
+- **Problem:** First try at water/splash/swimmer masks (step 4). Swimmer is fine (SAM 2 on her box). Splash as "white pixels in the water" marks sun reflections and white banners as splash and misses grey foam. Water from SAM 2 (points on blue pixels) also takes blue or bright banners above the pool.
+- **Why:** Foam, reflections and banners have the same colors. SAM 2 needs a box or points and doesn't know what "splash" is.
+- **Plan:** SAM 3, which finds things from a text prompt ("splash", "water"). Its weights are behind a Meta sign-up on Hugging Face (facebook/sam3).
+
 ### 25. Pose model's left/right for legs is a coin flip on legs-only frames (2026-11-11)
 - **Problem:** Taking each leg box's side from the pose skeleton (step 3) is right 36-42% of the time on new pools (arms: ~80%).
 - **Why:** Most leg frames show only the legs (verticals, splits). The COCO pose model needs the torso and face to know left from right; without them it invents a body and often puts both its left and right leg on the same real leg.
