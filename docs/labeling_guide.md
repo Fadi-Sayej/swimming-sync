@@ -167,3 +167,42 @@ feet and where each leg is (`swimsync.dataset.facing`).
 **When done:** `python -m swimsync.dataset.facing export` (Label Studio running) writes the crops to
 `data/raw/datasets/m2_facing`.
 
+
+## Side views (leg sides, #25)
+
+Front/back has no answer when she is side-on (about half the frames). There, her sides follow
+from two other facts: which way the front of her legs faces, and which leg is nearer you.
+Project **M2 side view - test**: the 53 test frames with both legs hand-drawn, made by
+`python -m swimsync.dataset.facing sideview`. The two leg boxes are drawn as **A** (blue, the one
+on the image's left) and **B** (orange). The boxes don't tell you her sides.
+
+**Question 1: which way does the front of her legs face?** (kneecaps, tops of the feet, the
+front of her swimsuit)
+
+| Key | Choice |
+|-----|--------|
+| 1 | front: toward you |
+| 2 | back: away from you |
+| 3 | image left: toward the image's left edge (side view) |
+| 4 | image right: toward the image's right edge (side view) |
+| 5 | can't tell |
+
+**Question 2, side views only (3 or 4): which leg is nearer you?**
+
+| Key | Choice | What you see |
+|-----|--------|--------------|
+| a | A | leg A covers part of B, or is sharper / bigger / less under water |
+| b | B | the other way round |
+| c | can't tell | |
+
+- Skip question 2 when you chose front, back or can't tell.
+- Answer for **her body**, as in front/back: in a split seen from the side, where does her front face?
+- About 5 seconds per frame, then Submit (Ctrl+Enter).
+
+**When done:** `python -m swimsync.dataset.facing sideview check` (Label Studio running) gives her
+sides from your answers and compares them with the hand-drawn sides.
+
+**Training frames:** project **M2 side view - train** (`python -m swimsync.dataset.facing sideview train`):
+the 473 training frames answered "can't tell" in front/back, same two questions. Here A and B are
+the outline model's leg boxes, so they can be wrong: if a box isn't on one of her legs, press 5
+(can't tell).

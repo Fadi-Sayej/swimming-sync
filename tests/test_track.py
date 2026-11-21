@@ -116,3 +116,37 @@ def test_track_sides_stops_at_max_gap():
              [{"legs": [IMG_L, IMG_R], "facing": None, "cut": False}] * 3
     assert track_sides(frames, 3, [IMG_L, IMG_R], anchor=facing_anchor, max_gap=2) == ([None, None], None)
     assert track_sides(frames, 2, [IMG_L, IMG_R], anchor=facing_anchor, max_gap=2)[1] == 2
+
+
+def test_nearest_anchor_gives_the_frame_and_its_sides():
+    from swimsync.limbs.track import facing_anchor, nearest_anchor
+    frames = [{"legs": [IMG_L, IMG_R], "facing": ("front", 0.9), "cut": False},
+              {"legs": [IMG_L, IMG_R], "facing": None, "cut": False},
+              {"legs": [IMG_L, IMG_R], "facing": None, "cut": False}]
+    assert nearest_anchor(frames, 2, facing_anchor) == (0, {"left": IMG_L, "right": IMG_R})
+    assert nearest_anchor(frames, 2, facing_anchor, max_gap=1) == (None, None)
+    frames[1]["cut"] = True  # the anchor is in another shot
+    assert nearest_anchor(frames, 2, facing_anchor) == (None, None)
+
+
+def _mask(box, shape=(420, 300)):
+    m = np.zeros(shape, bool)
+    x1, y1, x2, y2 = box
+    m[y1:y2, x1:x2] = True
+    return m
+
+
+def test_sides_from_masks_gives_each_box_the_leg_mask_inside_it():
+    from swimsync.limbs.track import sides_from_masks
+    masks = {"left": _mask(IMG_L), "right": _mask(IMG_R)}
+    assert sides_from_masks(masks, [IMG_R, IMG_L]) == ["right", "left"]
+    assert sides_from_masks(masks, [IMG_L]) == ["left"]
+
+
+def test_sides_from_masks_gives_no_side_where_no_mask_reaches():
+    from swimsync.limbs.track import sides_from_masks
+    far = (10, 10, 40, 40)
+    masks = {"left": _mask(IMG_L), "right": np.zeros((420, 300), bool)}  # right leg lost
+    assert sides_from_masks(masks, [IMG_L, far]) == ["left", None]
+    assert sides_from_masks({"left": np.zeros((420, 300), bool), "right": np.zeros((420, 300), bool)},
+                            [IMG_L, IMG_R]) == [None, None]

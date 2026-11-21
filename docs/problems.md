@@ -173,7 +173,8 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 - **Front/back result (2026-11-21):** 884 + 148 frames labeled. Front/back carries over to new pools (78% on 79 test frames when forced to choose). The geometry is right: on 59 frames labeled both ways, front/back + "feet up" gives the hand-drawn sides on 52 (88%). With "can't tell" as a third answer and a 0.8 confidence cut (chosen on val): front/back 91% right on test (21/23), leg sides right on 6 of 6 test frames, but it answers on only 6 of 53 two-leg frames.
 - **Tried (2026-11-21):** Carrying sure frames' sides through the video by following the two leg boxes: right 65% from < 0.5 s away, 31% from >= 1.5 s (she spins and the legs overlap, so the boxes swap). Kept to 0.1 s: sides right 11 of 12, given on 12 of 53 test frames (23%).
 - **Where it stands:** leg sides ~92% right on ~23% of frames, unknown on the rest. More front/back labels would make more frames sure; following the legs through spins would need more than box positions.
-
+- **Tried (2026-11-21):** SAM 2's video mode following each leg from the sure frame: 57% right on new pools (box carry 50%), both near chance past 0.1 s. With the legs together one mask takes both legs (19 of 45 frames); with clean masks it still swaps crossing legs (14 of 24 right). Not a fix.
+- **Fix in progress (2026-11-21):** side views (half the frames) get sides from two hand answers, which way the front of her legs faces and which leg is nearer: 91% right on the test frames (40 of 44 given; side views 25 of 26). Training labels next ("M2 side view - train", 473 frames), then models.
 
 ### 7. Pose model misses the swimmer underwater
 - **Problem:** Swimmer found in only 74% of frames, mostly missed when fully underwater.

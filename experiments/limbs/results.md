@@ -542,3 +542,86 @@ matching as `box_vs_hand.py`:
 - Doha: most misses are through-the-wall shots (her under water, seen through the pool wall);
   training has almost none. Only labeled frames of that kind would help.
 
+
+## Two quick checks: larger pose model, arms from nearby frames, 2026-11-21
+
+**Larger pose model for the points.** `python experiments/limbs/points_eval.py --pose yolo11m-pose.pt yolo11x-pose.pt`
+on the keypoint test set (87 frames, 342 labeled points; the predicted person with the biggest
+overlap with her labeled box is scored, her size = its longer side; slightly different matching
+from the 2026-11-14 table, so compare within this table only):
+
+| | yolo11m-pose (used now) | yolo11x-pose |
+|---|---|---|
+| Point within 10% of her size | 141 (41%) | 147 (43%) |
+| Point within 20% | 228 (67%) | 239 (70%) |
+| Point nearer the other side's label | 39% (91/236) | 41% (93/226) |
+
+A little closer, no better on sides, ~3x slower. Not worth switching.
+
+**Missed arms filled in from nearby frames.** `python experiments/limbs/arm_video_eval.py`: the
+outline model's arm boxes on the video frames up to 2 before and after each test frame, added
+where the test frame has none (or used to average each box's confidence). Arm AP50:
+
+| | New pools (53 arms) | Budapest 2024 (11 arms) |
+|---|---|---|
+| This frame only | **0.297** (28 found) | 0.346 (9) |
+| + arms seen within 1 frame, either side | 0.292 (28) | 0.310 (9) |
+| + arms seen within 2 frames, both sides | 0.295 (28) | 0.346 (9) |
+| Confidence averaged over 2 frames | 0.234 (28) | 0.382 (9) |
+
+No gain: of the 31 arms missed on new pools, only 6 are found on a nearby frame (13 at overlap
+>= 0.3, already covered by a loose box on the test frame). The model misses the same arms on
+every frame; the frames around don't help.
+
+## Leg sides: SAM 2 following each leg from the sure frame, 2026-11-21
+
+`python experiments/limbs/sam_track_eval.py` (helpers `nearest_anchor`, `sides_from_masks` in
+`swimsync.limbs.track`). Same sure front/back frames as above (confidence >= 0.8, nearest in the
+shot, no distance limit). On the sure frame the two leg boxes become two SAM 2 objects; SAM 2's
+video mode follows them to the test frame (~30 s per frame on the Mac). Next to it, the box-center
+carry with no distance limit. Hand boxes, right / sides given, by distance to the sure frame:
+
+| | 0-0.1 s | 0.1-0.5 s | 0.5-1 s | > 1 s | All |
+|---|---|---|---|---|---|
+| New pools, SAM 2 follows | 7/7 | 5/10 | 2/4 | 2/7 | **16/28 (57%)** |
+| New pools, box centers | 7/7 | 4/10 | 0/4 | 4/9 | 15/30 (50%) |
+| Budapest 2024, SAM 2 follows | 2/5 | 5/6 | 1/1 | 1/3 | 9/15 (60%) |
+| Budapest 2024, box centers | 4/5 | 5/6 | 1/1 | 1/3 | 11/15 (73%) |
+
+Model boxes: new pools 8/13 (SAM 2) vs 7/13; Budapest 5/8 both.
+
+Why it doesn't help (45 test frames):
+- **19 frames: one mask takes both legs** (11 right, chance). With the legs together, one leg's
+  box holds both legs and SAM 2 outlines the pair. This is also why Budapest's near frames drop
+  to 2/5.
+- **24 frames: clean masks, one per leg, still only 14 right (58%).** SAM 2 swaps two look-alike
+  legs when they cross or spin, the same failure as the box carry.
+- 2 frames: both legs lost (she went under).
+
+Even with the merged masks fixed, the ceiling is ~58%, so this is not worth more work. Leg sides
+stay ~92% right on the ~23% of frames within 0.1 s of a sure frame (box carry, above), unknown
+elsewhere.
+
+## Leg sides in side views: check on the test frames, 2026-11-21
+
+Front/back has no answer on about half the frames (side views). There, her sides follow from
+which way the front of her legs faces (image left / right / up / down) and which leg is nearer
+the camera (`swimsync.dataset.facing.sides_from_view`: her left = head direction x front
+direction). Checked on the 53 two-leg test frames with hand-drawn sides, answered by hand
+(`python -m swimsync.dataset.facing sideview check`, project "M2 side view - test"):
+
+| Her front faces | Frames | Sides given | Right |
+|---|---|---|---|
+| Front (camera) | 6 | 6 | 5 |
+| Back | 12 | 12 | 10 |
+| Image left / right / up / down | 35 | 26 | **25 (96%)** |
+| **All** | 53 | **44** | **40 (91%)** |
+
+Feet direction from the hand keypoints (44 frames; feet up otherwise). Assuming feet up on every
+frame: 39 of 43 right, about the same (37 of 44 frames have the feet within 45 degrees of up), so
+the models don't need it. Side views not given: no nearer leg answered (5) or a front along her
+body (4).
+
+**Reading:** the geometry works, and side views (the frames front/back couldn't do) are the
+best part. Next: the same two answers on the 473 training frames marked "can't tell" in
+front/back ("M2 side view - train"), then a model for each answer.

@@ -129,3 +129,77 @@ def test_feet_from_people_ignores_unsure_points():
     her[15, 2] = 0.1  # ankle unsure: one point left, no direction
     assert feet_from_people([her], [(90, 0, 110, 200)]) is None
     assert feet_from_people([], [(90, 0, 110, 200)]) is None
+
+
+# --- side views: which way the front of her legs faces + which leg is nearer ---------------
+
+BOX_L, BOX_R = (100, 100, 140, 300), (160, 100, 200, 300)  # on the image's left / right
+
+
+def test_side_view_facing_image_right_with_feet_up_puts_her_left_leg_nearer():
+    from swimsync.dataset.facing import sides_from_view
+    # upside down, front of the legs toward the image's right: her left side faces the camera
+    assert sides_from_view("image right", "A", BOX_L, BOX_R) == ("left", "right")
+    assert sides_from_view("image right", "B", BOX_L, BOX_R) == ("right", "left")
+    assert sides_from_view("image left", "A", BOX_L, BOX_R) == ("right", "left")
+
+
+def test_view_front_back_uses_the_front_back_geometry():
+    from swimsync.dataset.facing import sides_from_view
+    # feet up, facing the camera: her left leg is on the image's left
+    assert sides_from_view("front", None, BOX_L, BOX_R) == ("left", "right")
+    assert sides_from_view("back", None, BOX_L, BOX_R) == ("right", "left")
+
+
+def test_view_without_an_answer_gives_no_sides():
+    from swimsync.dataset.facing import sides_from_view
+    assert sides_from_view("can't tell", "A", BOX_L, BOX_R) is None
+    assert sides_from_view("image left", None, BOX_L, BOX_R) is None
+    assert sides_from_view("image left", "can't tell", BOX_L, BOX_R) is None
+
+
+def test_view_task_names_the_image_left_box_a():
+    from swimsync.dataset.facing import view_task
+    t = view_task("/x.jpg", [BOX_R, BOX_L], 400, 400)
+    boxes = t["predictions"][0]["result"]
+    assert [b["value"]["rectanglelabels"] for b in boxes] == [["A"], ["B"]]
+    assert boxes[0]["value"]["x"] == 25.0  # BOX_L
+
+
+def test_view_choices_reads_both_answers():
+    from swimsync.dataset.facing import view_choices
+    res = [{"type": "choices", "from_name": "view", "value": {"choices": ["image right"]}},
+           {"type": "choices", "from_name": "nearer", "value": {"choices": ["B"]}}]
+    assert view_choices(res) == ("image right", "B")
+    assert view_choices(res[:1]) == ("image right", None)
+    assert view_choices([]) == (None, None)
+
+
+def test_view_config_has_both_questions():
+    from swimsync.dataset.facing import view_config
+    c = view_config()
+    for v in ("front", "back", "image left", "image right", "can't tell", '"A"', '"B"'):
+        assert f'value="{v}"' in c or v in c
+
+
+RIGHT = np.array([1.0, 0.0])
+BOX_LOW, BOX_HIGH = (300, 250, 400, 300), (300, 150, 400, 200)  # lower / higher in the image
+
+
+def test_lying_on_her_back_feet_right_front_up_puts_her_right_leg_nearer():
+    from swimsync.dataset.facing import sides_from_view
+    # head on the image's left, feet right, front facing the top of the image: her left side
+    # faces away from the camera, so the nearer leg is her right
+    assert sides_from_view("image up", "A", BOX_LOW, BOX_HIGH, feet=RIGHT) == ("right", "left")
+    assert sides_from_view("image up", "B", BOX_LOW, BOX_HIGH, feet=RIGHT) == ("left", "right")
+
+
+def test_lying_on_her_back_feet_right_facing_you_puts_her_left_leg_higher():
+    from swimsync.dataset.facing import sides_from_view
+    assert sides_from_view("front", None, BOX_LOW, BOX_HIGH, feet=RIGHT) == ("right", "left")
+
+
+def test_front_along_her_feet_gives_no_sides():
+    from swimsync.dataset.facing import sides_from_view
+    assert sides_from_view("image up", "A", BOX_L, BOX_R) is None  # feet up and front up: impossible
+    assert sides_from_view("front", None, BOX_L, BOX_R, feet=None) is None

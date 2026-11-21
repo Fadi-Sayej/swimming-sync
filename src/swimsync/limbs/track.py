@@ -9,11 +9,10 @@ leg sides there, and follow the two leg boxes frame by frame to the target frame
 import cv2
 import numpy as np
 
-from swimsync.dataset.facing import sides_from_facing
+from swimsync.dataset.facing import FEET_UP, sides_from_facing
 from swimsync.limbs.sides import assign_sides
 
 TORSO = (5, 6, 11, 12)  # shoulders and hips
-FEET_UP = np.array([0.0, -1.0])  # legs out of the water (image y grows downwards)
 
 
 def is_anchor(kp, conf_min=0.5):
@@ -77,6 +76,22 @@ def facing_anchor(f, min_conf=0.8):
     return {sides[0]: a, sides[1]: b}
 
 
+def nearest_anchor(frames, target, anchor, max_gap=None):
+    """(index, {"left": box, "right": box}) of the anchor frame nearest `target` in its shot.
+
+    (None, None) when the shot has no anchor within `max_gap` frames (any distance if None).
+    """
+    start = max([i for i in range(target + 1) if frames[i]["cut"]], default=0)
+    end = min([i - 1 for i in range(target + 1, len(frames)) if frames[i]["cut"]], default=len(frames) - 1)
+    for a in sorted(range(start, end + 1), key=lambda i: abs(i - target)):
+        if max_gap is not None and abs(a - target) > max_gap:
+            break
+        tracks = anchor(frames[a])
+        if tracks is not None:
+            return a, tracks
+    return None, None
+
+
 def track_sides(frames, target, target_boxes, anchor=_anchor_tracks, max_gap=None):
     """Sides for the leg boxes `target_boxes` on frame `target`, from the nearest anchor in the shot.
 
@@ -86,21 +101,39 @@ def track_sides(frames, target, target_boxes, anchor=_anchor_tracks, max_gap=Non
     shot has no anchor (within `max_gap` frames, if given: legs that spin or overlap swap boxes, so
     long carries go wrong, #25).
     """
-    start = max([i for i in range(target + 1) if frames[i]["cut"]], default=0)
-    end = min([i - 1 for i in range(target + 1, len(frames)) if frames[i]["cut"]], default=len(frames) - 1)
-    for a in sorted(range(start, end + 1), key=lambda i: abs(i - target)):
-        if max_gap is not None and abs(a - target) > max_gap:
-            break
-        tracks = anchor(frames[a])
-        if tracks is None:
-            continue
-        step = 1 if target > a else -1
-        for k in range(a + step, target, step):
-            for s, i in pair(tracks, frames[k]["legs"]).items():
-                tracks[s] = frames[k]["legs"][i]
-        found = pair(tracks, target_boxes)
-        sides = [None] * len(target_boxes)
-        for s, i in found.items():
-            sides[i] = s
-        return sides, abs(target - a)
-    return [None] * len(target_boxes), None
+    a, tracks = nearest_anchor(frames, target, anchor, max_gap)
+    if a is None:
+        return [None] * len(target_boxes), None
+    step = 1 if target > a else -1
+    for k in range(a + step, target, step):
+        for s, i in pair(tracks, frames[k]["legs"]).items():
+            tracks[s] = frames[k]["legs"][i]
+    found = pair(tracks, target_boxes)
+    sides = [None] * len(target_boxes)
+    for s, i in found.items():
+        sides[i] = s
+    return sides, abs(target - a)
+
+
+def sides_from_masks(masks, boxes):
+    """Sides for `boxes` from the followed leg masks {"left": mask, "right": mask} (bool, H x W).
+
+    Each box takes a different leg, the pairing that puts the most mask pixels inside the boxes;
+    a box no leg mask reaches gets None.
+    """
+    def inside(m, b):
+        x1, y1, x2, y2 = (max(int(round(v)), 0) for v in b)
+        return int(m[y1:y2, x1:x2].sum())
+
+    px = {s: [inside(m, b) for b in boxes] for s, m in masks.items()}
+    sides = [None] * len(boxes)
+    if len(boxes) == 1:
+        s = max(px, key=lambda s: px[s][0])
+        sides[0] = s if px[s][0] > 0 else None
+        return sides
+    i, j = max(((i, j) for i in range(len(boxes)) for j in range(len(boxes)) if i != j),
+               key=lambda ij: px["left"][ij[0]] + px["right"][ij[1]], default=(None, None))
+    for s, k in (("left", i), ("right", j)):
+        if k is not None and px[s][k] > 0:
+            sides[k] = s
+    return sides

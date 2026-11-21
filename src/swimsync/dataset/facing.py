@@ -19,6 +19,7 @@ from pathlib import Path
 import numpy as np
 
 LEG = {"left": (11, 13, 15), "right": (12, 14, 16)}  # COCO hip, knee, ankle
+FEET_UP = np.array([0.0, -1.0])  # legs out of the water (image y grows downwards)
 
 
 def feet_dir(kp):
@@ -77,6 +78,38 @@ def sides_from_facing(front_or_back, feet, box_a, box_b):
     if facing(_centre(box_a), _centre(box_b), feet, min_sin=0) == front_or_back:
         return ("left", "right")
     return ("right", "left")
+
+
+# direction the front of her legs faces, x right / y up / z toward the camera
+VIEW_DIRS = {"front": (0, 0, 1), "back": (0, 0, -1), "image left": (-1, 0, 0), "image right": (1, 0, 0),
+             "image up": (0, 1, 0), "image down": (0, -1, 0)}
+
+
+def sides_from_view(view, nearer, box_a, box_b, feet=FEET_UP):
+    """Her sides for two leg boxes from the view, or None if the view gives no answer.
+
+    view: which way the front of her legs (kneecaps, tops of the feet) faces, a VIEW_DIRS key.
+    nearer: "A" or "B", the leg nearer the camera (needed when she is side-on).
+    feet: direction toward her feet in the image (x right, y down); default feet up.
+
+    Her left = head direction x front direction (with the head opposite the feet). If that
+    points at or away from the camera, the nearer leg decides; if it lies in the image, the
+    leg further along it is her left.
+    """
+    if view not in VIEW_DIRS or feet is None:
+        return None
+    head = -np.array([feet[0], -feet[1], 0.0])
+    left = np.cross(head, np.array(VIEW_DIRS[view], float))
+    if np.linalg.norm(left) < 0.3:  # front along her body: not a real pose
+        return None
+    if abs(left[2]) >= 0.7 * np.linalg.norm(left):
+        if nearer not in ("A", "B"):
+            return None
+        a_is_left = (left[2] > 0) == (nearer == "A")
+    else:
+        d = np.array(_centre(box_a)) - np.array(_centre(box_b))
+        a_is_left = d[0] * left[0] - d[1] * left[1] > 0
+    return ("left", "right") if a_is_left else ("right", "left")
 
 
 def square_crop(boxes, img_w, img_h, pad=0.2):
@@ -147,6 +180,47 @@ def facing_task(image_url, leg_boxes, img_w, img_h):
                          "height": 100 * (y2 - y1) / img_h, "rotation": 0, "rectanglelabels": ["leg"]}}
               for x1, y1, x2, y2 in leg_boxes]
     return {"data": {"image": image_url}, "predictions": [{"model_version": "seg_b3 legs", "result": result}]}
+
+
+def view_config():
+    return """<View>
+  <Header value="1) Front of her legs (kneecaps, tops of the feet) faces: you, away, or the image's left / right / top / bottom. 2) If left / right / top / bottom: which leg is nearer you, A or B?"/>
+  <Image name="image" value="$image" zoom="true" zoomControl="true"/>
+  <Choices name="view" toName="image" choice="single-radio" showInline="true" required="true">
+    <Choice value="front" hotkey="1"/>
+    <Choice value="back" hotkey="2"/>
+    <Choice value="image left" hotkey="3"/>
+    <Choice value="image right" hotkey="4"/>
+    <Choice value="can't tell" hotkey="5"/>
+    <Choice value="image up" hotkey="6"/>
+    <Choice value="image down" hotkey="7"/>
+  </Choices>
+  <Choices name="nearer" toName="image" choice="single-radio" showInline="true">
+    <Choice value="A" hotkey="a"/>
+    <Choice value="B" hotkey="b"/>
+    <Choice value="can't tell" hotkey="c"/>
+  </Choices>
+  <RectangleLabels name="legs" toName="image" strokeWidth="2" opacity="0.1">
+    <Label value="A" background="#2a78d6"/>
+    <Label value="B" background="#eb6834"/>
+  </RectangleLabels>
+</View>"""
+
+
+def view_task(image_url, leg_boxes, img_w, img_h):
+    """Task with the two leg boxes (pixels) drawn as A (the one on the image's left) and B."""
+    a, b = sorted(leg_boxes, key=lambda bx: bx[0] + bx[2])
+    task = facing_task(image_url, [a, b], img_w, img_h)
+    for r, name in zip(task["predictions"][0]["result"], ("A", "B")):
+        r["value"]["rectanglelabels"] = [name]
+    task["predictions"][0]["model_version"] = "hand leg boxes"
+    return task
+
+
+def view_choices(result):
+    """(view, nearer) from a side-view label; None for an unanswered question."""
+    got = {r["from_name"]: r["value"]["choices"][0] for r in result if r.get("type") == "choices"}
+    return got.get("view"), got.get("nearer")
 
 
 def pick_spread(times, n, min_gap=1.0):
@@ -222,6 +296,120 @@ def export():
     print(f"Saved to {out}")
 
 
+SIDEVIEW_TITLE = "M2 side view - test"
+SIDEVIEW_TRAIN_TITLE = "M2 side view - train"
+
+
+def _hand_test_legs():
+    """[(image path, her left leg box, her right leg box, w, h)]: 4-class test frames with both legs."""
+    import cv2
+
+    ds, out = Path("data/raw/datasets/m2_4cls"), []
+    for img in sorted((ds / "images/test").glob("*.jpg")):
+        h, w = cv2.imread(str(img)).shape[:2]
+        legs = {}
+        for line in (ds / "labels/test" / (img.stem + ".txt")).read_text().splitlines():
+            c, cx, cy, bw, bh = map(float, line.split())
+            if int(c) in (0, 1):
+                legs[int(c)] = ((cx - bw / 2) * w, (cy - bh / 2) * h, (cx + bw / 2) * w, (cy + bh / 2) * h)
+        if len(legs) == 2:
+            out.append((img, legs[0], legs[1], w, h))
+    return out
+
+
+def _hand_feet(name):
+    """Direction toward her feet from the hand-labeled hip/knee/ankle points (keypoint test set)."""
+    import cv2
+
+    ds = Path("data/raw/datasets/m2_pose")
+    lab, img = ds / "labels/test" / (Path(name).stem + ".txt"), ds / "images/test" / name
+    if not lab.exists():
+        return None
+    h, w = cv2.imread(str(img)).shape[:2]
+    kp = np.array(lab.read_text().split()[5:], float).reshape(17, 3) * [w, h, 1]
+    return feet_dir(kp)
+
+
+def sideview(args):
+    """Side-view labels on the test frames with hand-drawn leg sides, then check the geometry.
+
+        python -m swimsync.dataset.facing sideview          # Label Studio "M2 side view - test"
+        python -m swimsync.dataset.facing sideview check    # sides from the labels vs hand sides
+        python -m swimsync.dataset.facing sideview train    # "M2 side view - train": the training
+                                                            # frames answered "can't tell" in front/back
+    """
+    import random
+    import shutil
+    from collections import Counter
+
+    from swimsync.dataset.export_yolo import labeled_frames, project_titles
+
+    api, frames = _api(), _hand_test_legs()
+    if args == ["check"]:
+        lab, n = labeled_frames(api, SIDEVIEW_TITLE)
+        k = Counter()
+        for img, left, right, *_ in frames:
+            if img.name not in lab:
+                continue
+            view, nearer = view_choices(lab[img.name])
+            a, b = sorted([left, right], key=lambda bx: bx[0] + bx[2])
+            feet = _hand_feet(img.name)
+            k["feet from keypoints"] += feet is not None
+            sides = sides_from_view(view, nearer, a, b, FEET_UP if feet is None else feet)
+            group = view if view in ("front", "back", "can't tell") else "side / top / bottom"
+            k[group, "frames"] += 1
+            if sides is not None:
+                k[group, "given"] += 1
+                k[group, "right"] += sides == (("left", "right") if a is left else ("right", "left"))
+        print(f"{len(lab)} of {n} frames labeled; feet direction from keypoints on {k['feet from keypoints']}")
+        for g in ("front", "back", "side / top / bottom", "can't tell"):
+            print(f"  {g:19s}: {k[g, 'frames']} frames, sides given {k[g, 'given']}, "
+                  f"right {k[g, 'right']} ({100 * k[g, 'right'] / max(k[g, 'given'], 1):.0f}%)")
+        given = sum(k[g, "given"] for g in ("front", "back", "side / top / bottom"))
+        right = sum(k[g, "right"] for g in ("front", "back", "side / top / bottom"))
+        print(f"  all: sides given on {given} of {len(lab)}, right {right} ({100 * right / max(given, 1):.0f}%)")
+        return
+    titles = project_titles(api)
+    if args == ["train"]:
+        if SIDEVIEW_TRAIN_TITLE in titles:
+            print(f"'{SIDEVIEW_TRAIN_TITLE}' already exists; not importing again.")
+            return
+        import cv2
+
+        root = Path("data/raw/frames/m2")
+        legs = {r["file"]: r["legs"] for r in json.loads((root / "facing_train.json").read_text())}
+        lab, _ = labeled_frames(api, "M2 front/back - train")
+        names = sorted(n for n, r in lab.items() if facing_choice(r) == "unsure")
+        img_dir = (root / "images" / "facing_train").resolve()
+        tasks = []
+        for name in names:
+            h, w = cv2.imread(str(img_dir / name)).shape[:2]
+            tasks.append(view_task(f"/data/local-files/?d=images/facing_train/{name}", legs[name], w, h))
+        random.Random(0).shuffle(tasks)
+        pid = api.post("/api/projects", {"title": SIDEVIEW_TRAIN_TITLE, "label_config": view_config()})["id"]
+        api.post("/api/storages/localfiles", {"project": pid, "title": "frames", "path": str(img_dir),
+                                              "use_blob_urls": False})
+        api.post(f"/api/projects/{pid}/import", tasks)
+        print(f"'{SIDEVIEW_TRAIN_TITLE}': project {pid}, {len(tasks)} frames")
+        return
+    if SIDEVIEW_TITLE in titles:
+        api.patch(f"/api/projects/{titles[SIDEVIEW_TITLE]}", {"label_config": view_config()})
+        print(f"'{SIDEVIEW_TITLE}' already exists; updated its questions, not importing again.")
+        return
+    img_dir = Path("data/raw/frames/m2/images/sideview_test").resolve()
+    img_dir.mkdir(parents=True, exist_ok=True)
+    tasks = []
+    for img, left, right, w, h in frames:
+        shutil.copy(img, img_dir / img.name)
+        tasks.append(view_task(f"/data/local-files/?d=images/sideview_test/{img.name}", [left, right], w, h))
+    random.Random(0).shuffle(tasks)
+    pid = api.post("/api/projects", {"title": SIDEVIEW_TITLE, "label_config": view_config()})["id"]
+    api.post("/api/storages/localfiles", {"project": pid, "title": "frames", "path": str(img_dir),
+                                          "use_blob_urls": False})
+    api.post(f"/api/projects/{pid}/import", tasks)
+    print(f"'{SIDEVIEW_TITLE}': project {pid}, {len(tasks)} frames")
+
+
 def main():
     import cv2
     from ultralytics import YOLO
@@ -231,6 +419,8 @@ def main():
 
     if sys.argv[1:] == ["export"]:
         return export()
+    if sys.argv[1:2] == ["sideview"]:
+        return sideview(sys.argv[2:])
     n_total = {"train": int(sys.argv[1]) if len(sys.argv) > 1 else 1000, "test": 150}
     root = Path("data/raw/frames/m2").resolve()
     scans = [json.loads(p.read_text()) for p in sorted((root / "scan").glob("*.json"))]

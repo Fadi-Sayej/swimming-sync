@@ -73,6 +73,12 @@ class LabelStudioAPI:
             raise RuntimeError(f"{path}: {r.status_code} {r.text[:300]}")
         return r.json()
 
+    def patch(self, path, body):
+        r = self.s.patch(self.url + path, json=body, timeout=60)
+        if not r.ok:
+            raise RuntimeError(f"{path}: {r.status_code} {r.text[:300]}")
+        return r.json()
+
 
 def setup_project(api, title, tasks, images_dir):
     """Create the project, link `images_dir` as local storage and import `tasks`.
