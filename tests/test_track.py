@@ -80,3 +80,39 @@ def test_cut_between_two_different_pictures_but_not_two_similar_ones():
     red[:] = (20, 30, 200)
     assert not is_cut(blue, blue2)
     assert is_cut(blue, red)
+
+
+
+IMG_L, IMG_R = RIGHT_BOX, LEFT_BOX  # the box on the image's left / right
+
+
+def test_facing_anchor_takes_sides_from_a_sure_front_back_answer():
+    from swimsync.limbs.track import facing_anchor
+    # feet up (her legs out of the water), facing the camera: her left leg is on the image's left
+    f = {"legs": [IMG_R, IMG_L], "facing": ("front", 0.9)}
+    assert facing_anchor(f) == {"left": IMG_L, "right": IMG_R}
+    assert facing_anchor({**f, "facing": ("back", 0.9)}) == {"left": IMG_R, "right": IMG_L}
+
+
+def test_facing_anchor_needs_a_sure_answer_and_two_legs():
+    from swimsync.limbs.track import facing_anchor
+    assert facing_anchor({"legs": [IMG_L, IMG_R], "facing": ("front", 0.6)}) is None
+    assert facing_anchor({"legs": [IMG_L, IMG_R], "facing": ("unsure", 0.99)}) is None
+    assert facing_anchor({"legs": [IMG_L], "facing": ("front", 0.9)}) is None
+    assert facing_anchor({"legs": [IMG_L, IMG_R], "facing": None}) is None
+
+
+def test_track_sides_with_front_back_anchors():
+    from swimsync.limbs.track import facing_anchor
+    frames = [{"legs": [IMG_L, IMG_R], "facing": ("front", 0.9), "cut": False},
+              {"legs": [IMG_L, IMG_R], "facing": ("front", 0.5), "cut": False}]
+    sides, gap = track_sides(frames, 1, [IMG_L, IMG_R], anchor=facing_anchor)
+    assert sides == ["left", "right"] and gap == 1
+
+
+def test_track_sides_stops_at_max_gap():
+    from swimsync.limbs.track import facing_anchor
+    frames = [{"legs": [IMG_L, IMG_R], "facing": ("front", 0.9), "cut": False}] + \
+             [{"legs": [IMG_L, IMG_R], "facing": None, "cut": False}] * 3
+    assert track_sides(frames, 3, [IMG_L, IMG_R], anchor=facing_anchor, max_gap=2) == ([None, None], None)
+    assert track_sides(frames, 2, [IMG_L, IMG_R], anchor=facing_anchor, max_gap=2)[1] == 2

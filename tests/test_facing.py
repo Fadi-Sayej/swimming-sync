@@ -73,3 +73,59 @@ def test_pick_spread_keeps_gap_and_count():
     assert len(picks) == 10
     assert all(b - a >= 2.0 for a, b in zip(picks, picks[1:]))
     assert pick_spread([1.0, 1.5, 2.0], 5, min_gap=1.0) == [1.0, 2.0]
+
+
+def test_square_crop_is_square_and_holds_both_legs():
+    from swimsync.dataset.facing import square_crop
+    x1, y1, x2, y2 = square_crop([(400, 100, 440, 400), (460, 120, 500, 380)], 1920, 1080, pad=0.2)
+    assert x2 - x1 == y2 - y1 == round(300 * 1.4)
+    assert x1 <= 400 and y1 <= 100 and x2 >= 500 and y2 >= 400
+
+
+def test_square_crop_slides_back_inside_the_image():
+    from swimsync.dataset.facing import square_crop
+    assert square_crop([(0, 900, 100, 1080)], 1920, 1080, pad=0.2) == (0, 828, 252, 1080)
+
+
+def test_square_crop_shrinks_only_when_bigger_than_the_image():
+    from swimsync.dataset.facing import square_crop
+    x1, y1, x2, y2 = square_crop([(10, 10, 300, 190)], 320, 200, pad=0.5)
+    assert (x2 - x1, y2 - y1) == (200, 200) and 0 <= x1 and x2 <= 320
+
+
+def test_facing_choice_reads_the_answer():
+    from swimsync.dataset.facing import facing_choice
+    legs = {"type": "rectanglelabels", "value": {"rectanglelabels": ["leg"]}}
+    assert facing_choice([legs, {"type": "choices", "value": {"choices": ["back"]}}]) == "back"
+    assert facing_choice([legs, {"type": "choices", "value": {"choices": ["can't tell"]}}]) == "unsure"
+    assert facing_choice([legs]) is None
+
+
+def test_write_facing_dataset_sorts_square_crops_into_class_folders(tmp_path):
+    import cv2
+
+    from swimsync.dataset.facing import write_facing_dataset
+    img = np.zeros((200, 400, 3), np.uint8)
+    cv2.imwrite(str(tmp_path / "a.jpg"), img)
+    out = tmp_path / "ds"
+    write_facing_dataset(out, {"train": [(tmp_path / "a.jpg", [(100, 50, 120, 150)], "front")],
+                               "val": [(tmp_path / "a.jpg", [(100, 50, 120, 150)], "back")]}, max_size=64)
+    crop = cv2.imread(str(out / "train/front/a.jpg"))
+    assert crop.shape[:2] == (64, 64)
+    assert (out / "val/back/a.jpg").exists() and not (out / "train/back").exists()
+
+
+def test_feet_from_people_uses_the_person_in_the_leg_boxes():
+    from swimsync.dataset.facing import feet_from_people
+    legs = [(90, 0, 110, 200), (140, 0, 160, 200)]
+    other = kp(l_kn=(500, 100), l_an=(500, 200))         # someone else, feet down
+    her = kp(l_kn=(100, 150), l_an=(100, 20), r_kn=(150, 150), r_an=(150, 20))  # feet up
+    assert np.allclose(feet_from_people([other, her], legs), UP)
+
+
+def test_feet_from_people_ignores_unsure_points():
+    from swimsync.dataset.facing import feet_from_people
+    her = kp(l_kn=(100, 150), l_an=(100, 20))
+    her[15, 2] = 0.1  # ankle unsure: one point left, no direction
+    assert feet_from_people([her], [(90, 0, 110, 200)]) is None
+    assert feet_from_people([], [(90, 0, 110, 200)]) is None

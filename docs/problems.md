@@ -146,6 +146,11 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 - **Why:** The training alone took ~16.5 GB, too much next to Label Studio, the browser and the editor on a 24 GB Mac (same as #26).
 - **Fix:** Stopped it; `BATCH=8`: 9.6 GB, ~30 s per round.
 
+### 29. Label Studio stopped showing images mid-labeling (2026-11-17)
+- **Problem:** While labeling front/back, a frame showed "There was an issue loading URL from $image value" and "Authentication credentials were not provided".
+- **Why:** The browser's login had run out. Every request (images included) got 401; the server, the image file and the 315 saved labels were fine.
+- **Fix:** Reload the page and log in again (credentials in `data/raw/labelstudio/credentials.txt`); redo the frame that was open.
+
 ## Still open
 
 ### 25. Pose model's left/right for legs is a coin flip on legs-only frames (2026-11-11)
@@ -160,6 +165,9 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 - **How a person tells (2026-11-14):** toes point to her front, the inside of the foot faces the other foot, kneecaps vs backs of the knees. Small details: the both-legs classifier at 512 px (feet ~4x bigger) is still a coin flip (54%), so ~170 training frames are too few.
 - **Root cause (2026-11-14):** "her left or right?" flips in a mirror; ready-made image models see an image and its mirror as nearly the same, so with mirrored training copies the loss stays at a coin flip (0.693) even on training images. 4x more frames from nearby video frames: still 54%. Front/back of the legs (doesn't flip in a mirror; sides then follow by geometry) is learnable but 88 frames gave 43% on test.
 - **Next:** Arm sides from the pose model. Legs: label front/back (one click per frame, ~1000 frames, about an hour) and retrain the front/back classifier; or ask Assaf on Nov 24 first.
+- **Front/back result (2026-11-21):** 884 + 148 frames labeled. Front/back carries over to new pools (78% on 79 test frames when forced to choose). The geometry is right: on 59 frames labeled both ways, front/back + "feet up" gives the hand-drawn sides on 52 (88%). With "can't tell" as a third answer and a 0.8 confidence cut (chosen on val): front/back 91% right on test (21/23), leg sides right on 6 of 6 test frames, but it answers on only 6 of 53 two-leg frames.
+- **Tried (2026-11-21):** Carrying sure frames' sides through the video by following the two leg boxes: right 65% from < 0.5 s away, 31% from >= 1.5 s (she spins and the legs overlap, so the boxes swap). Kept to 0.1 s: sides right 11 of 12, given on 12 of 53 test frames (23%).
+- **Where it stands:** leg sides ~92% right on ~23% of frames, unknown on the rest. More front/back labels would make more frames sure; following the legs through spins would need more than box positions.
 
 
 ### 7. Pose model misses the swimmer underwater

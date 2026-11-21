@@ -9,9 +9,11 @@ leg sides there, and follow the two leg boxes frame by frame to the target frame
 import cv2
 import numpy as np
 
+from swimsync.dataset.facing import sides_from_facing
 from swimsync.limbs.sides import assign_sides
 
 TORSO = (5, 6, 11, 12)  # shoulders and hips
+FEET_UP = np.array([0.0, -1.0])  # legs out of the water (image y grows downwards)
 
 
 def is_anchor(kp, conf_min=0.5):
@@ -59,17 +61,37 @@ def _anchor_tracks(f):
     return tracks if len(tracks) == 2 else None
 
 
-def track_sides(frames, target, target_boxes):
+def facing_anchor(f, min_conf=0.8):
+    """{"left": box, "right": box} from a sure front/back answer on two legs, or None.
+
+    f["facing"]: (answer, confidence) of the front/back model on the two legs. Assumes her feet
+    point up; on frames labeled both ways that matches the hand-drawn sides 88% of the time (#25).
+    """
+    if len(f["legs"]) != 2 or not f.get("facing"):
+        return None
+    answer, conf = f["facing"]
+    if answer not in ("front", "back") or conf < min_conf:
+        return None
+    a, b = f["legs"]
+    sides = sides_from_facing(answer, FEET_UP, a, b)
+    return {sides[0]: a, sides[1]: b}
+
+
+def track_sides(frames, target, target_boxes, anchor=_anchor_tracks, max_gap=None):
     """Sides for the leg boxes `target_boxes` on frame `target`, from the nearest anchor in the shot.
 
-    frames: [{"legs": [box], "people": [keypoints (17, 3)], "cut": True if a cut comes right before
-    this frame}], in time order. Returns (sides, frames between the anchor and the target), or
-    ([None, ...], None) when the shot has no anchor.
+    frames: [{"legs": [box], "cut": True if a cut comes right before this frame, plus what `anchor`
+    reads: "people" (keypoints) for the torso anchor, "facing" for facing_anchor}], in time order.
+    Returns (sides, frames between the anchor and the target), or ([None, ...], None) when the
+    shot has no anchor (within `max_gap` frames, if given: legs that spin or overlap swap boxes, so
+    long carries go wrong, #25).
     """
     start = max([i for i in range(target + 1) if frames[i]["cut"]], default=0)
     end = min([i - 1 for i in range(target + 1, len(frames)) if frames[i]["cut"]], default=len(frames) - 1)
     for a in sorted(range(start, end + 1), key=lambda i: abs(i - target)):
-        tracks = _anchor_tracks(frames[a])
+        if max_gap is not None and abs(a - target) > max_gap:
+            break
+        tracks = anchor(frames[a])
         if tracks is None:
             continue
         step = 1 if target > a else -1

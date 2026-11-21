@@ -450,3 +450,69 @@ tell), ~3 s per frame instead of ~1-2 min for keypoints, so ~1000 frames from th
 videos is about an hour of labeling. That is the cheapest way to more data for a question the
 models can learn.
 
+## Leg sides from front/back, 2026-11-21
+
+884 train frames (18 videos) + 148 test frames (4 test videos) labeled front / back / can't tell,
+one click each (`python -m swimsync.dataset.facing`, then `... facing export`). Can't tell: 54%
+of train, 47% of test (mostly side views). Model: YOLO11s-cls on a square crop around both leg
+boxes, 384 px, mirrored and upside-down copies allowed (front/back doesn't change),
+`IMGSZ=384 BATCH=32 EPOCHS=60 scripts/train_limbs.sh facing`. Val = last 20% of each video.
+
+**Front/back accuracy** (truly front/back frames):
+
+| Model | Val (same videos, later) | Test (new pools) |
+|---|---|---|
+| 2 answers (front/back only) | 90% | 78% (62/79; Budapest 23/26, Doha 12/15, Paris 2025 11/15, Paris 2026 16/23) |
+| 3 answers, all answers | 71% of 78 given | 69% of 54 given |
+| 3 answers, confidence >= 0.8 (cut chosen on val) | 87% (39/45) | 91% (21/23) |
+
+**From front/back to sides:** her left/right follow from front/back, the direction toward her
+feet and where each leg box is (`swimsync.dataset.facing.sides_from_facing`). On 59 frames
+labeled both ways (sides and front/back), "feet up" gives the hand-drawn sides on 52 (88%). The
+pose model's feet direction was worse (29 of 36): on upside-down legs it often puts the feet at
+the bottom.
+
+**Leg sides on the 4-class test frames** (`experiments/limbs/facing_eval.py`, both legs boxed: 37
+new-pool + 16 Budapest frames):
+
+| Setup | Answered | Sides right |
+|---|---|---|
+| 2 answers, every frame | 53 | 24 (45%) |
+| 3 answers, confidence >= 0.8 | 6 | 6 (100%) |
+
+Forced on every frame, it is a coin flip again: many of these frames are side views, where
+front/back has no answer. When the model is sure, sides are right, but that is 11% of the frames.
+Next: carry the sure frames' sides through the video by following the leg boxes, and more labels
+to make more frames sure.
+
+### Carrying sure sides through the video, 2026-11-21
+
+`experiments/limbs/track_facing_eval.py`: every video frame within 3 s of a test frame gets a
+front/back answer (two leg boxes from the outline model); the nearest sure frame (>= 0.8) in the
+same shot gives the sides, and the two leg boxes are followed frame by frame to the test frame
+(`swimsync.limbs.track.track_sides` with `facing_anchor`).
+
+How far the sides are carried decides everything (each sure frame in the shot carried to the
+test frame, 53 two-leg test frames):
+
+| Sure frame's distance | Right |
+|---|---|
+| same frame | 4 / 4 |
+| < 0.5 s | 74 / 113 (65%) |
+| 0.5-1.5 s | 77 / 164 (47%) |
+| >= 1.5 s | 66 / 211 (31%) |
+
+Below 50% means the boxes really swap: in verticals she spins and the legs overlap, so following
+boxes by position loses which leg is which. A majority vote of all sure frames in the shot: 17 of
+43. So the carry is kept short (`max_gap`):
+
+| Carry at most | Sides given (of 53) | Right |
+|---|---|---|
+| 0 s (same frame) | 4 | 4 |
+| **0.1 s (~3 frames)** | **12** | **11 (92%)** |
+| 0.2 s | 19 | 14 (74%) |
+| 0.5 s | 28 | 20 (71%) |
+
+With the outline model's boxes at 0.1 s: 6 of 7. **Leg sides: ~92% right on ~23% of the frames;
+the rest stay unknown.**
+

@@ -8,7 +8,8 @@ where each leg box is.
 Labeling: one click per frame (front / back / can't tell), with the two leg boxes found by the
 outline model drawn as a guide.
 
-    python -m swimsync.dataset.facing      # Label Studio "M2 front/back - train" and "- test"
+    python -m swimsync.dataset.facing          # Label Studio "M2 front/back - train" and "- test"
+    python -m swimsync.dataset.facing export   # -> data/raw/datasets/m2_facing (Label Studio running)
 """
 
 import json
@@ -39,6 +40,19 @@ def feet_dir(kp):
     return v / np.linalg.norm(v) if np.linalg.norm(v) > 0.3 else None
 
 
+def feet_from_people(people, legs, conf_min=0.3):
+    """feet_dir of the person with the most sure hip/knee/ankle points inside the leg boxes."""
+    best, best_n = None, 0
+    for p in people:
+        p = np.array(p, float)
+        p[:, 2] = p[:, 2] >= conf_min
+        n = sum(any(b[0] <= p[i, 0] <= b[2] and b[1] <= p[i, 1] <= b[3] for b in legs)
+                for idx in LEG.values() for i in idx if p[i, 2])
+        if n > best_n:
+            best, best_n = p, n
+    return None if best is None else feet_dir(best)
+
+
 def facing(left_c, right_c, feet, min_sin=0.3):
     """'front' (legs face the camera) or 'back', from where her left and right legs are.
 
@@ -63,6 +77,51 @@ def sides_from_facing(front_or_back, feet, box_a, box_b):
     if facing(_centre(box_a), _centre(box_b), feet, min_sin=0) == front_or_back:
         return ("left", "right")
     return ("right", "left")
+
+
+def square_crop(boxes, img_w, img_h, pad=0.2):
+    """Square around all boxes (side = longer side * (1 + 2 * pad)), moved inside the image.
+
+    Square because the classifier centre-crops a square: a tall crop of a vertical would lose
+    her feet. Shrinks only when the image is too small for it.
+    """
+    b = np.asarray(boxes, float)
+    x1, y1 = b[:, :2].min(axis=0)
+    x2, y2 = b[:, 2:].max(axis=0)
+    side = min(round(max(x2 - x1, y2 - y1) * (1 + 2 * pad)), img_w, img_h)
+    out = []
+    for lo, hi, size in ((x1, x2, img_w), (y1, y2, img_h)):
+        start = min(max(round((lo + hi) / 2 - side / 2), 0), size - side)
+        out += [start, start + side]
+    return out[0], out[2], out[1], out[3]
+
+
+def facing_choice(result):
+    """'front', 'back' or 'unsure' (can't tell) from a front/back label; None if no answer."""
+    for r in result:
+        if r.get("type") == "choices":
+            choice = r["value"]["choices"][0]
+            return choice if choice in ("front", "back") else "unsure"
+    return None
+
+
+def write_facing_dataset(out, splits, max_size=512, pad=0.2):
+    """splits: {split: [(image path, leg boxes, 'front'/'back')]} -> out/<split>/<answer>/<name>.jpg."""
+    import shutil
+
+    import cv2
+
+    if out.exists():
+        shutil.rmtree(out)
+    for split, items in splits.items():
+        for path, legs, answer in items:
+            img = cv2.imread(str(path))
+            x1, y1, x2, y2 = square_crop(legs, img.shape[1], img.shape[0], pad)
+            crop = img[y1:y2, x1:x2]
+            if crop.shape[0] > max_size:
+                crop = cv2.resize(crop, (max_size, max_size), interpolation=cv2.INTER_AREA)
+            (out / split / answer).mkdir(parents=True, exist_ok=True)
+            cv2.imwrite(str(out / split / answer / Path(path).name), crop, [cv2.IMWRITE_JPEG_QUALITY, 95])
 
 
 def facing_config():
@@ -122,14 +181,56 @@ def find_two_legs(videos, boxer, device, conf=0.4):
     return out
 
 
+def _api():
+    from swimsync.dataset.labelstudio import LabelStudioAPI
+
+    cred = dict(line.split(": ", 1) for line in
+                Path("data/raw/labelstudio/credentials.txt").read_text().splitlines() if ": " in line)
+    return LabelStudioAPI(cred["url"], cred["api_token"])
+
+
+def export():
+    """data/raw/datasets/m2_facing/{train,val,test}/{front,back,unsure}/ from the labeled frames.
+
+    "unsure" (can't tell: mostly side views) is kept as a class so the model can say it too.
+    """
+    from collections import Counter
+
+    from swimsync.dataset.export_yolo import labeled_frames, project_titles, split_train_val
+
+    api, root = _api(), Path("data/raw/frames/m2")
+    titles, data = project_titles(api), {}
+    for split in ("train", "test"):
+        title = f"M2 front/back - {split}"
+        if title not in titles:
+            continue
+        legs = {r["file"]: r["legs"] for r in json.loads((root / f"facing_{split}.json").read_text())}
+        lab, n = labeled_frames(api, title)
+        answers = {name: facing_choice(r) for name, r in lab.items()}
+        data[split] = [(root / "images" / f"facing_{split}" / name, legs[name], a)
+                       for name, a in sorted(answers.items()) if a]
+        print(f"{title}: {len(lab)} labeled of {n}: {dict(Counter(a for *_, a in data[split]))}")
+    by_name = {Path(item[0]).name: item for item in data["train"]}
+    train, val = split_train_val(list(by_name))
+    splits = {"train": [by_name[n] for n in train], "val": [by_name[n] for n in val]}
+    if data.get("test"):
+        splits["test"] = data["test"]
+    out = Path("data/raw/datasets/m2_facing")
+    write_facing_dataset(out, splits)
+    for s, items in splits.items():
+        print(f"{s}: {dict(Counter(a for _, _, a in items))}")
+    print(f"Saved to {out}")
+
+
 def main():
     import cv2
     from ultralytics import YOLO
 
     from swimsync.dataset.export_yolo import project_titles
-    from swimsync.dataset.labelstudio import LabelStudioAPI
     from swimsync.waterline.above_water import pick_device
 
+    if sys.argv[1:] == ["export"]:
+        return export()
     n_total = {"train": int(sys.argv[1]) if len(sys.argv) > 1 else 1000, "test": 150}
     root = Path("data/raw/frames/m2").resolve()
     scans = [json.loads(p.read_text()) for p in sorted((root / "scan").glob("*.json"))]
@@ -144,9 +245,7 @@ def main():
         found.update(find_two_legs(todo, YOLO("experiments/limbs/output/seg_b3/weights/best.pt"), pick_device()))
         cache.write_text(json.dumps(found))
 
-    cred = dict(line.split(": ", 1) for line in
-                Path("data/raw/labelstudio/credentials.txt").read_text().splitlines() if ": " in line)
-    api = LabelStudioAPI(cred["url"], cred["api_token"])
+    api = _api()
     titles = project_titles(api)
     for split, videos in groups.items():
         title = f"M2 front/back - {split}"

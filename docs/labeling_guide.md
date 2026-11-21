@@ -153,7 +153,7 @@ One question per frame: **which way do her legs face?**
 |-----|--------|--------------|
 | 1 | front | kneecaps, tops of the feet, toes pointing toward you, the front of her swimsuit |
 | 2 | back | backs of the knees, heels, soles of the feet, buttocks |
-| 3 | can't tell | side view (one leg behind the other), too blurry, legs hidden, or not her legs |
+| 3 | can't tell | side view (the kneecap shows as a bump on one edge of the leg, even if the legs look side by side), too blurry, legs hidden, or not her legs |
 
 - Answer for **her body**, even when one leg is bent or turned a bit: in a split, which way does
   her front face?
@@ -163,4 +163,7 @@ One question per frame: **which way do her legs face?**
 
 The model learns front/back; her left and right then follow from the direction toward her
 feet and where each leg is (`swimsync.dataset.facing`).
+
+**When done:** `python -m swimsync.dataset.facing export` (Label Studio running) writes the crops to
+`data/raw/datasets/m2_facing`.
 

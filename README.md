@@ -155,6 +155,10 @@ python -m swimsync.dataset.keypoints     # Label Studio projects "M2 keypoints -
 python -m swimsync.dataset.export_pose   # crops around her limbs + 17 points -> data/raw/datasets/m2_pose
 SIZE=m IMGSZ=640 BATCH=8 scripts/train_limbs.sh pose
 python -m swimsync.dataset.facing        # leg sides via front/back: Label Studio "M2 front/back - train" / "- test"
+python -m swimsync.dataset.facing export # -> data/raw/datasets/m2_facing (front / back / unsure)
+IMGSZ=384 BATCH=32 EPOCHS=60 scripts/train_limbs.sh facing   # front/back classifier
+python experiments/limbs/facing_eval.py --min-conf 0.8      # leg sides from front/back on the test frames
+python experiments/limbs/track_facing_eval.py              # same, sides carried up to 0.1 s from sure frames
 ```
 
 ## Tests
