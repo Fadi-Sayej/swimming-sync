@@ -175,6 +175,7 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 - **Where it stands:** leg sides ~92% right on ~23% of frames, unknown on the rest. More front/back labels would make more frames sure; following the legs through spins would need more than box positions.
 - **Tried (2026-11-21):** SAM 2's video mode following each leg from the sure frame: 57% right on new pools (box carry 50%), both near chance past 0.1 s. With the legs together one mask takes both legs (19 of 45 frames); with clean masks it still swaps crossing legs (14 of 24 right). Not a fix.
 - **Fix in progress (2026-11-21):** side views (half the frames) get sides from two hand answers, which way the front of her legs faces and which leg is nearer: 91% right on the test frames (40 of 44 given; side views 25 of 26). Training labels next ("M2 side view - train", 473 frames), then models.
+- **Checked (2026-11-22, Assaf):** no training mirrored images without swapping the side labels. Every left/right box detector and the "is the left leg her left?" classifiers ran with fliplr=0; the pose runs mirror with flip_idx (left/right points swap); front/back mirrors safely. So flips are not the cause.
 
 ### 7. Pose model misses the swimmer underwater
 - **Problem:** Swimmer found in only 74% of frames, mostly missed when fully underwater.
