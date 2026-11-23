@@ -625,3 +625,40 @@ body (4).
 **Reading:** the geometry works, and side views (the frames front/back couldn't do) are the
 best part. Next: the same two answers on the 473 training frames marked "can't tell" in
 front/back ("M2 side view - train"), then a model for each answer.
+
+## Leg sides in side views: models, 2026-11-23
+
+Two classifiers (YOLO11s-cls, 384 px) on the 473 side-view training frames plus the front/back
+training frames (`python -m swimsync.dataset.facing export-view`, `scripts/train_limbs.sh view
+nearleg`, scored by `experiments/limbs/view_eval.py`):
+
+- **view** (front / back / image left / right / up / down / can't tell), square crop around
+  both legs. Each training frame written 4 times (as is, mirrored left-right, top-bottom, both)
+  with the answer mirrored too; flips off in training. Val 0.69.
+- **nearer leg**, three tries:
+  - both legs, A outlined blue, B orange, mirrored copies with A/B swapped: never learned
+    (training error at a coin flip; all-A or all-B);
+  - one leg at a time, the rest darkened, "nearer or farther?" (doesn't change in a mirror),
+    default training augmentation: never learned either;
+  - the same with augmentation off (no random crops, erasing, color changes): learns, 74% of
+    held-back legs (half nearer, half farther).
+
+Test frames (53 two-leg frames, hand boxes), each answer from you or from a model:
+
+| Which way she faces | Nearer leg | Sides given | Right |
+|---|---|---|---|
+| you | you | 43 | **39 (91%)** |
+| model | you | 39 | 33 (85%) |
+| you | one-leg model | 46 | 34 (74%) |
+| you | always A (box on the image's left) | 46 | 37 (80%) |
+| model | one-leg model | 47 | 32 (68%) |
+| model | always A | 47 | **36 (77%)** |
+
+With the outline model's boxes (22 frames where it finds both legs): 16 of 22 right with the
+one-leg model.
+
+**Reading:** the direction model works (85% with your nearer answers, 91% with yours). The
+nearer leg is the weak part: no model beats "A is nearer". A is the nearer leg on 74% of your
+training answers and 76% of test answers; this may be the cameras (or a labeling habit) and may
+not hold on new videos. Best fully automatic now: model view + "A nearer", 77% right on 89% of
+frames (vs front/back alone: ~92% on ~23%).

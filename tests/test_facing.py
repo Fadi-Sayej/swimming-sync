@@ -203,3 +203,63 @@ def test_front_along_her_feet_gives_no_sides():
     from swimsync.dataset.facing import sides_from_view
     assert sides_from_view("image up", "A", BOX_L, BOX_R) is None  # feet up and front up: impossible
     assert sides_from_view("front", None, BOX_L, BOX_R, feet=None) is None
+
+
+from swimsync.dataset.facing import flip_box, mirror_label, pair_crop, view_class  # noqa: E402
+
+
+def test_mirror_left_right_swaps_left_right_and_the_two_legs_only():
+    assert mirror_label("image left", "h") == "image right"
+    assert mirror_label("A", "h") == "B"
+    assert mirror_label("image up", "h") == "image up"
+    assert mirror_label("front", "h") == "front"
+
+
+def test_mirror_top_bottom_swaps_up_down_only():
+    assert mirror_label("image up", "v") == "image down"
+    assert mirror_label("image left", "v") == "image left"
+    assert mirror_label("A", "v") == "A"
+
+
+def test_mirror_both_ways_swaps_both():
+    assert mirror_label("image down", "hv") == "image up"
+    assert mirror_label("B", "hv") == "A"
+
+
+def test_flip_box_left_right_and_top_bottom():
+    assert flip_box((10, 20, 30, 60), 100, 200, "h") == (70, 20, 90, 60)
+    assert flip_box((10, 20, 30, 60), 100, 200, "v") == (10, 140, 30, 180)
+
+
+def test_left_right_flip_makes_the_left_box_the_right_one():
+    a, b = (0, 0, 10, 10), (50, 0, 60, 10)
+    fa, fb = flip_box(a, 100, 100, "h"), flip_box(b, 100, 100, "h")
+    assert fa[0] > fb[0]  # A is now on the right, so it becomes B: mirror_label("A", "h") == "B"
+
+
+def test_view_class_folder_names():
+    assert view_class("image left") == "left"
+    assert view_class("can't tell") == "unsure"
+    assert view_class("front") == "front"
+    assert view_class(None) is None
+
+
+def test_pair_crop_outlines_a_blue_and_b_orange():
+    img = np.zeros((200, 200, 3), np.uint8)
+    crop = pair_crop(img, (20, 20, 80, 180), (120, 20, 180, 180), max_size=512)
+    assert crop.shape[0] == crop.shape[1]
+    px = crop.reshape(-1, 3)
+    blue = ((px[:, 0] > 150) & (px[:, 2] < 100)).any()   # BGR
+    orange = ((px[:, 2] > 150) & (px[:, 0] < 100)).any()
+    assert blue and orange
+
+
+from swimsync.dataset.facing import leg_focus  # noqa: E402
+
+
+def test_leg_focus_keeps_the_leg_and_darkens_the_rest():
+    img = np.full((200, 200, 3), 200, np.uint8)
+    crop = leg_focus(img, (20, 20, 80, 180), (120, 20, 180, 180), max_size=512)
+    # square crop around both boxes starts at x = 0 here (moved inside the image)
+    assert crop[100, 50].tolist() == [200, 200, 200]   # inside the leg's box
+    assert crop[100, 150].max() < 100                  # the other leg: darkened

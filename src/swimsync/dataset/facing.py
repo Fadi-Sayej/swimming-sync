@@ -10,6 +10,7 @@ outline model drawn as a guide.
 
     python -m swimsync.dataset.facing          # Label Studio "M2 front/back - train" and "- test"
     python -m swimsync.dataset.facing export   # -> data/raw/datasets/m2_facing (Label Studio running)
+    python -m swimsync.dataset.facing export-view  # -> m2_view, m2_nearer (side-view answers, #25)
 """
 
 import json
@@ -127,6 +128,68 @@ def square_crop(boxes, img_w, img_h, pad=0.2):
         start = min(max(round((lo + hi) / 2 - side / 2), 0), size - side)
         out += [start, start + side]
     return out[0], out[2], out[1], out[3]
+
+
+# Mirroring the image changes these answers ("h" = left-right, "v" = top-bottom). A is always
+# the box on the image's left, so a left-right mirror makes the same leg B.
+MIRROR = {"h": {"image left": "image right", "image right": "image left", "A": "B", "B": "A"},
+          "v": {"image up": "image down", "image down": "image up"}}
+VIEW_CLASS = {"front": "front", "back": "back", "image left": "left", "image right": "right",
+              "image up": "up", "image down": "down", "can't tell": "unsure"}
+CLASS_VIEW = {c: v for v, c in VIEW_CLASS.items()}
+
+
+def mirror_label(label, flips):
+    for f in flips:
+        label = MIRROR[f].get(label, label)
+    return label
+
+
+def flip_box(box, w, h, flips):
+    x1, y1, x2, y2 = box
+    if "h" in flips:
+        x1, x2 = w - x2, w - x1
+    if "v" in flips:
+        y1, y2 = h - y2, h - y1
+    return (x1, y1, x2, y2)
+
+
+def view_class(view):
+    """Folder name for a side-view answer; None if unanswered."""
+    return VIEW_CLASS.get(view)
+
+
+def pair_crop(img, box_a, box_b, pad=0.2, max_size=512):
+    """Square crop around both legs with A outlined in blue and B in orange (for the nearer-leg model)."""
+    import cv2
+
+    x1, y1, x2, y2 = square_crop([box_a, box_b], img.shape[1], img.shape[0], pad)
+    out = img.copy()
+    t = max(2, round((x2 - x1) / 120))
+    for box, color in ((box_a, (214, 120, 42)), (box_b, (52, 104, 235))):  # BGR blue, orange
+        p1, p2 = tuple(int(v) for v in box[:2]), tuple(int(v) for v in box[2:])
+        cv2.rectangle(out, p1, p2, color, t)
+    crop = out[y1:y2, x1:x2]
+    if crop.shape[0] > max_size:
+        crop = cv2.resize(crop, (max_size, max_size), interpolation=cv2.INTER_AREA)
+    return crop
+
+
+def leg_focus(img, box, other, pad=0.2, max_size=512, dim=0.35):
+    """Square crop around both legs with everything outside `box` darkened (nearer-or-farther model).
+
+    Nearer/farther belongs to the leg, not to where it is, so it doesn't change in a mirror.
+    """
+    import cv2
+
+    x1, y1, x2, y2 = square_crop([box, other], img.shape[1], img.shape[0], pad)
+    out = (img.astype(np.float32) * dim).astype(np.uint8)
+    bx1, by1, bx2, by2 = (int(round(v)) for v in box)
+    out[by1:by2, bx1:bx2] = img[by1:by2, bx1:bx2]
+    crop = out[y1:y2, x1:x2]
+    if crop.shape[0] > max_size:
+        crop = cv2.resize(crop, (max_size, max_size), interpolation=cv2.INTER_AREA)
+    return crop
 
 
 def facing_choice(result):
@@ -300,6 +363,73 @@ SIDEVIEW_TITLE = "M2 side view - test"
 SIDEVIEW_TRAIN_TITLE = "M2 side view - train"
 
 
+def export_view(pad=0.2, max_size=512):
+    """data/raw/datasets/m2_view/{train,val}/<view>/, m2_nearer/{train,val}/{A,B}/, m2_nearleg/{train,val}/{near,far}/.
+
+    Frames: the front/back training frames, with the side-view answers for those answered
+    "can't tell" there. Train frames are written 4 times (as is, mirrored left-right, top-bottom,
+    both) with the answers mirrored too (mirror_label), so training runs with flips off.
+    """
+    import shutil
+    from collections import Counter
+
+    import cv2
+
+    from swimsync.dataset.export_yolo import labeled_frames, split_train_val
+
+    api, root = _api(), Path("data/raw/frames/m2")
+    legs = {r["file"]: r["legs"] for r in json.loads((root / "facing_train.json").read_text())}
+    fb, _ = labeled_frames(api, "M2 front/back - train")
+    side, _ = labeled_frames(api, SIDEVIEW_TRAIN_TITLE)
+    answers = {n: (facing_choice(r), None) for n, r in fb.items() if facing_choice(r) in ("front", "back")}
+    answers.update({n: view_choices(r) for n, r in side.items()})
+    train, val = split_train_val(sorted(answers))
+    outs = {"view": Path("data/raw/datasets/m2_view"), "nearer": Path("data/raw/datasets/m2_nearer"),
+            "nearleg": Path("data/raw/datasets/m2_nearleg")}
+    for out in outs.values():
+        if out.exists():
+            shutil.rmtree(out)
+    count = Counter()
+    for split, names in (("train", train), ("val", val)):
+        for name in names:
+            view, nearer = answers[name]
+            img = cv2.imread(str(root / "images" / "facing_train" / name))
+            h, w = img.shape[:2]
+            for flips in (("", "h", "v", "hv") if split == "train" else ("",)):
+                im = img
+                if "h" in flips:
+                    im = cv2.flip(im, 1)
+                if "v" in flips:
+                    im = cv2.flip(im, 0)
+                a, b = sorted((flip_box(bx, w, h, flips) for bx in legs[name]), key=lambda bx: bx[0] + bx[2])
+                stem = Path(name).stem + (f"_{flips}" if flips else "")
+                v = view_class(mirror_label(view, flips))
+                if v:
+                    x1, y1, x2, y2 = square_crop([a, b], w, h, pad)
+                    crop = im[y1:y2, x1:x2]
+                    if crop.shape[0] > max_size:
+                        crop = cv2.resize(crop, (max_size, max_size), interpolation=cv2.INTER_AREA)
+                    (outs["view"] / split / v).mkdir(parents=True, exist_ok=True)
+                    cv2.imwrite(str(outs["view"] / split / v / f"{stem}.jpg"), crop, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                    count["view", split, v] += 1
+                if nearer in ("A", "B") and view not in ("front", "back", "can't tell"):
+                    n = mirror_label(nearer, flips)
+                    (outs["nearer"] / split / n).mkdir(parents=True, exist_ok=True)
+                    cv2.imwrite(str(outs["nearer"] / split / n / f"{stem}.jpg"), pair_crop(im, a, b, pad, max_size),
+                                [cv2.IMWRITE_JPEG_QUALITY, 95])
+                    count["nearer", split, n] += 1
+                    if not flips:  # one leg at a time; mirroring doesn't change the answer, so no copies
+                        for leg, other, ans in ((a, b, "near" if nearer == "A" else "far"),
+                                                (b, a, "far" if nearer == "A" else "near")):
+                            (outs["nearleg"] / split / ans).mkdir(parents=True, exist_ok=True)
+                            cv2.imwrite(str(outs["nearleg"] / split / ans / f"{stem}_{'AB'[leg is b]}.jpg"),
+                                        leg_focus(im, leg, other, pad, max_size), [cv2.IMWRITE_JPEG_QUALITY, 95])
+                            count["nearleg", split, ans] += 1
+    for k in ("view", "nearer", "nearleg"):
+        for split in ("train", "val"):
+            print(k, split, {c: n for (kk, s, c), n in sorted(count.items()) if kk == k and s == split})
+
+
 def _hand_test_legs():
     """[(image path, her left leg box, her right leg box, w, h)]: 4-class test frames with both legs."""
     import cv2
@@ -419,6 +549,8 @@ def main():
 
     if sys.argv[1:] == ["export"]:
         return export()
+    if sys.argv[1:] == ["export-view"]:
+        return export_view()
     if sys.argv[1:2] == ["sideview"]:
         return sideview(sys.argv[2:])
     n_total = {"train": int(sys.argv[1]) if len(sys.argv) > 1 else 1000, "test": 150}
