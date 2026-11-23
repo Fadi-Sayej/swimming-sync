@@ -90,8 +90,11 @@ def main():
                 answer, conf = front_or_back(clf, img, legs, dev)
                 if answer == "unsure" or conf < a.min_conf:
                     continue
+                sides = sides_from_facing(answer, FEET_UP, legs[0], legs[1])
+                if sides is None:  # crossed legs
+                    continue
                 c["decided"] += 1
-                c["right"] += sides_from_facing(answer, FEET_UP, legs[0], legs[1]) == ("left", "right")
+                c["right"] += sides == ("left", "right")
         print(f"\n{group} ({len(images)} frames)")
         for inp, c in n.items():
             print(f"  {inp:11s}: both legs {c['frames']}, found {c['found']}, front/back given {c['decided']}, "

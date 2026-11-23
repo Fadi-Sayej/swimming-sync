@@ -263,3 +263,27 @@ def test_leg_focus_keeps_the_leg_and_darkens_the_rest():
     # square crop around both boxes starts at x = 0 here (moved inside the image)
     assert crop[100, 50].tolist() == [200, 200, 200]   # inside the leg's box
     assert crop[100, 150].max() < 100                  # the other leg: darkened
+
+
+# crossed legs: the two boxes almost on top of each other (frames doha 58 s, paris2026 75 s)
+BOX_X1, BOX_X2 = (100, 100, 200, 300), (106, 80, 210, 300)
+
+
+def test_crossed_legs_give_no_sides_from_front_or_back():
+    assert sides_from_facing("front", UP, BOX_X1, BOX_X2) is None
+
+
+def test_crossed_legs_give_no_sides_from_a_front_or_back_view():
+    from swimsync.dataset.facing import sides_from_view
+    assert sides_from_view("front", None, BOX_X1, BOX_X2) is None
+    assert sides_from_view("back", None, BOX_X1, BOX_X2) is None
+
+
+def test_crossed_legs_still_get_sides_from_the_nearer_leg():
+    from swimsync.dataset.facing import sides_from_view
+    assert sides_from_view("image right", "A", BOX_X1, BOX_X2) == ("left", "right")
+
+
+def test_crossed_legs_give_no_anchor_for_carrying_sides():
+    from swimsync.limbs.track import facing_anchor
+    assert facing_anchor({"legs": [BOX_X1, BOX_X2], "facing": ("front", 0.95)}) is None

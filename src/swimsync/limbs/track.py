@@ -73,7 +73,7 @@ def facing_anchor(f, min_conf=0.8):
         return None
     a, b = f["legs"]
     sides = sides_from_facing(answer, FEET_UP, a, b)
-    return {sides[0]: a, sides[1]: b}
+    return {sides[0]: a, sides[1]: b} if sides else None
 
 
 def nearest_anchor(frames, target, anchor, max_gap=None):

@@ -74,8 +74,26 @@ def _centre(b):
     return ((b[0] + b[2]) / 2, (b[1] + b[3]) / 2)
 
 
+def apart(box_a, box_b, direction, min_gap=0.25):
+    """Are the box centres apart along `direction` (image x, y) by >= min_gap of the boxes' size there?
+
+    Crossed legs give two boxes almost on top of each other; which one is "further left" is
+    then a few pixels and says nothing about her sides.
+    """
+    u = np.asarray(direction, float)
+    u = u / np.linalg.norm(u)
+    d = np.array(_centre(box_a)) - np.array(_centre(box_b))
+    size = np.mean([abs(u[0]) * (b[2] - b[0]) + abs(u[1]) * (b[3] - b[1]) for b in (box_a, box_b)])
+    return abs(d @ u) >= min_gap * size
+
+
 def sides_from_facing(front_or_back, feet, box_a, box_b):
-    """Her sides for two leg boxes: ("left", "right") if box_a is her left leg, else reversed."""
+    """Her sides for two leg boxes: ("left", "right") if box_a is her left leg, else reversed.
+
+    None when the boxes overlap too much to say which is where (crossed legs).
+    """
+    if feet is None or not apart(box_a, box_b, (-feet[1], feet[0])):
+        return None
     if facing(_centre(box_a), _centre(box_b), feet, min_sin=0) == front_or_back:
         return ("left", "right")
     return ("right", "left")
@@ -108,6 +126,8 @@ def sides_from_view(view, nearer, box_a, box_b, feet=FEET_UP):
             return None
         a_is_left = (left[2] > 0) == (nearer == "A")
     else:
+        if not apart(box_a, box_b, (left[0], -left[1])):  # crossed legs: can't tell which is where
+            return None
         d = np.array(_centre(box_a)) - np.array(_centre(box_b))
         a_is_left = d[0] * left[0] - d[1] * left[1] > 0
     return ("left", "right") if a_is_left else ("right", "left")

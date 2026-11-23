@@ -662,3 +662,20 @@ nearer leg is the weak part: no model beats "A is nearer". A is the nearer leg o
 training answers and 76% of test answers; this may be the cameras (or a labeling habit) and may
 not hold on new videos. Best fully automatic now: model view + "A nearer", 77% right on 89% of
 frames (vs front/back alone: ~92% on ~23%).
+
+### Rule fix: crossed legs, 2026-11-23
+
+Of the 4 test frames where your side-view answers + the rule gave wrong sides, 2 had crossed
+legs: the two leg boxes nearly cover each other (centers < 1% of the image width apart), so
+"which box is further left" was a few pixels. The rule now says can't tell when the centers are
+less than 1/4 of a box apart across her body (`facing.apart`, used by `sides_from_facing` and
+`sides_from_view`; side views decided by the nearer leg are not affected). The other 2: the rule
+works step by step; the answer or the old hand-drawn side is off (both hard to see).
+
+| | Before | After |
+|---|---|---|
+| Your answers + rule | 39 / 43 (91%) | **38 / 40 (95%)** |
+| Model view + your nearer | 33 / 39 (85%) | 30 / 35 (86%) |
+| Model view + one-leg model | 32 / 47 (68%) | 29 / 43 (67%) |
+| Model view + always A | 36 / 47 (77%) | 33 / 43 (77%) |
+| Front/back sure + 0.1 s carry | 11 / 12 on 23% | 10 / 11 (91%) on 21% |
