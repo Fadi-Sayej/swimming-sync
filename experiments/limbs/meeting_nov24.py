@@ -1,5 +1,6 @@
 """Pictures and demo clips for the Nov 24 meeting -> experiments/limbs/output/meeting_nov24/.
 
+    python experiments/limbs/meeting_nov24.py failures  # where our current models go wrong, by cause
     python experiments/limbs/meeting_nov24.py sheet     # side-view answers: you vs the models, test frames
     python experiments/limbs/meeting_nov24.py mirrors   # how mirrored training copies swap the answers
     python experiments/limbs/meeting_nov24.py demo      # 8 s clips from the 4 test videos, sides drawn
@@ -97,6 +98,67 @@ def sheet(dev):
     print(f"sheet: first 2 rows model right, last 2 rows wrong; model right on {n_ok} of {n_given} given")
 
 
+def failures(dev):
+    """Where our current models go wrong on the test frames, 4 per cause (box model, direction, nearer leg)."""
+    boxer = YOLO(BOXES)
+    models = {"view": YOLO(VIEW), "nearer": YOLO(NEARER)}
+    yours, _ = labeled_frames(_api(), SIDEVIEW_TITLE)
+    causes = {"box": [], "view": [], "nearer": []}
+    for g in ("newpool", "budapest"):
+        for p in (DS / f"test_{g}.txt").read_text().split():
+            img = cv2.imread(p)
+            t = hand_legs(p, img.shape[1], img.shape[0])
+            if len(t) < 2 or Path(p).name not in yours:
+                continue
+            r = boxer.predict(img, imgsz=960, conf=0.25, verbose=False, device=dev)[0]
+            found = [b for c, b in zip(r.boxes.cls.tolist(), r.boxes.xyxy.tolist()) if boxer.names[int(c)] == "leg"]
+            a, b = sorted([t["left"], t["right"]], key=lambda x: x[0] + x[2])
+            yv, yn = view_choices(yours[Path(p).name])
+            base = dict(p=p, img=img, a=a, b=b, you=(yv, yn))
+            if len(found) != 2:
+                causes["box"].append(dict(base, found=found, line=f"Box model found {len(found)} leg(s), you drew 2"))
+                continue
+            truth = ("left", "right") if a is t["left"] else ("right", "left")
+            mv, _ = view_of(models["view"], img, a, b, dev)
+            mn = nearer_of(models["nearer"], img, a, b, dev)[0] if mv not in ("front", "back", "can't tell") else None
+            ms = sides_from_view(mv, mn, a, b, FEET_UP)
+            if ms is None or ms == truth or sides_from_view(yv, yn, a, b, FEET_UP) != truth:
+                continue  # only frames your answers get right and the models get wrong
+            if mv != yv:
+                causes["view"].append(dict(base, line=f"Direction model: {short(mv, None).split(',')[0]}"))
+            elif mn != yn:
+                causes["nearer"].append(dict(base, line=f"Nearer-leg model: {mn} nearer"))
+    titles = {"box": "1. Box model doesn't find both legs (no sides possible)",
+              "view": "2. Direction model wrong (which way she faces)",
+              "nearer": "3. Nearer-leg model wrong"}
+    rows = []
+    for cause, items in causes.items():
+        print(cause, len(items))
+        tiles = []
+        for r in items[::max(len(items) // 4, 1)][:4]:
+            im = r["img"].copy()
+            th = max(2, im.shape[1] // 400)
+            for box, color in ((r["a"], BLUE), (r["b"], ORANGE)):
+                cv2.rectangle(im, tuple(int(v) for v in box[:2]), tuple(int(v) for v in box[2:]), color, th)
+            for box in r.get("found", []):
+                cv2.rectangle(im, tuple(int(v) for v in box[:2]), tuple(int(v) for v in box[2:]), (255, 255, 255), th + 1)
+            im = cv2.resize(im, (480, 270))
+            im = np.vstack([np.full((62, 480, 3), 30, np.uint8), im])
+            text(im, r["line"], (6, 22), 0.5, (120, 140, 255))
+            if cause != "box":
+                text(im, f"You: {short(*r['you'])}", (6, 48), 0.5)
+            else:
+                text(im, "white = model's legs, blue/orange = yours", (6, 48), 0.5, (200, 200, 200))
+            text(im, Path(r["p"]).stem, (6, 325), 0.4, GRAY)
+            tiles.append(im)
+        while len(tiles) < 4:
+            tiles.append(np.full((332, 480, 3), 30, np.uint8))
+        head = np.full((40, 1920, 3), 15, np.uint8)
+        text(head, f"{titles[cause]}: {len(items)} of 53 test frames", (8, 28), 0.75, (255, 255, 255), 2)
+        rows += [head, np.hstack(tiles)]
+    cv2.imwrite(str(OUT / "2_current_models_wrong.jpg"), np.vstack(rows), [cv2.IMWRITE_JPEG_QUALITY, 90])
+
+
 def mirrors():
     stem = "delfin2026_solo1_00041.0s"
     tiles = []
@@ -188,6 +250,8 @@ def main():
     what = sys.argv[1:] or ["sheet", "mirrors", "demo"]
     dev = pick_device()
     OUT.mkdir(parents=True, exist_ok=True)
+    if "failures" in what:
+        failures(dev)
     if "sheet" in what:
         sheet(dev)
     if "mirrors" in what:
