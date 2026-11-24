@@ -4,6 +4,7 @@
     python experiments/limbs/meeting_nov24.py sheet     # side-view answers: you vs the models, test frames
     python experiments/limbs/meeting_nov24.py mirrors   # how mirrored training copies swap the answers
     python experiments/limbs/meeting_nov24.py demo      # 8 s clips from the 4 test videos, sides drawn
+    python experiments/limbs/meeting_nov24.py models    # 10 s clips: each model's output and which step fails
 
 Leg sides in the demo: the front/back model when sure (>= 0.8), else the view model + one-leg
 nearer model; arm sides from the ready-made pose model. Label Studio must run for `sheet`.
@@ -180,13 +181,10 @@ def mirrors():
     print("mirrors: written")
 
 
-def demo(dev, seconds=8.0):
-    boxer, pose = YOLO(BOXES), YOLO("yolo11m-pose.pt")
-    models = {"view": YOLO(VIEW), "nearer": YOLO(NEARER), "facing": YOLO(FACING)}
+def clip_starts(seconds):
+    """Start time per test video: 2 s before the window with the most two-leg test frames."""
     starts = {"paris2026_wc_reijnen": None, "paris2025_wc_thean": None, "budapest2024_wc_hoevertsz": None,
               "doha2024_worlds_platanioti": None}
-    # start each clip 2 s before the test frame with both legs drawn by hand that has the most
-    # two-leg test frames within the next 8 s
     times = {}
     for p in (DS / "test_newpool.txt").read_text().split() + (DS / "test_budapest.txt").read_text().split():
         video, t = Path(p).stem.rsplit("_", 1)
@@ -196,6 +194,13 @@ def demo(dev, seconds=8.0):
     for v in starts:
         ts = sorted(times.get(v, []))
         starts[v] = max(0.0, max(ts, key=lambda t0: sum(t0 <= t < t0 + seconds - 2 for t in ts)) - 2) if ts else 30.0
+    return starts
+
+
+def demo(dev, seconds=8.0):
+    boxer, pose = YOLO(BOXES), YOLO("yolo11m-pose.pt")
+    models = {"view": YOLO(VIEW), "nearer": YOLO(NEARER), "facing": YOLO(FACING)}
+    starts = clip_starts(seconds)
     for v, t0 in starts.items():
         cap = cv2.VideoCapture(f"data/raw/test/{v}.mp4")
         fps = cap.get(cv2.CAP_PROP_FPS) or 25
@@ -213,6 +218,100 @@ def demo(dev, seconds=8.0):
             writer.write(frame)
         writer.release()
         print(f"demo {v}: {t0:.1f}-{t0 + seconds:.1f} s", flush=True)
+
+
+def models_video(dev, seconds=10.0):
+    """Each model's own output on every frame, and which step fails (the main problems)."""
+    from facing_eval import front_or_back
+
+    from swimsync.dataset.facing import sides_from_facing
+
+    boxer, pose = YOLO(BOXES), YOLO("yolo11m-pose.pt")
+    fb_model, view_model, near_model = YOLO(FACING), YOLO(VIEW), YOLO(NEARER)
+    combined, size = None, None
+    for v, t0 in clip_starts(seconds).items():
+        cap = cv2.VideoCapture(f"data/raw/test/{v}.mp4")
+        fps = cap.get(cv2.CAP_PROP_FPS) or 25
+        cap.set(cv2.CAP_PROP_POS_MSEC, t0 * 1000)
+        w = None
+        for _ in range(int(seconds * fps)):
+            ok, img = cap.read()
+            if not ok:
+                break
+            r = boxer.predict(img, imgsz=960, conf=0.25, verbose=False, device=dev)[0]
+            names = [boxer.names[int(c)] for c in r.boxes.cls.tolist()]
+            boxes = r.boxes.xyxy.tolist()
+            polys = r.masks.xy if r.masks is not None else [None] * len(boxes)
+            legs = [b for k, b in zip(names, boxes) if k == "leg"]
+            arms = [b for k, b in zip(names, boxes) if k == "arm"]
+            lines, side = [], {}
+            ok_legs = len(legs) == 2
+            lines.append((f"1. Outline model: {len(legs)} leg(s), {len(arms)} arm(s)" +
+                          ("" if ok_legs else "  (left/right needs both legs)"), None if ok_legs else (0, 200, 255)))
+            if ok_legs:
+                a, b = sorted(legs, key=lambda x: x[0] + x[2])
+                fb, pfb = front_or_back(fb_model, img, [a, b], dev)
+                sure = fb in ("front", "back") and pfb >= 0.8
+                lines.append((f"2. Front/back model: {fb} ({pfb:.2f})" + ("  sure" if sure else "  not sure"), None))
+                view, pv = view_of(view_model, img, a, b, dev)
+                lines.append((f"3. Direction model: {view} ({pv:.2f})", None))
+                result, how = None, ""
+                if sure:
+                    result, how = sides_from_facing(fb, FEET_UP, a, b), "front/back model + rule"
+                elif view == "can't tell":
+                    how = "direction model can't tell"
+                elif view in ("front", "back"):
+                    result, how = sides_from_view(view, None, a, b), "direction model + rule"
+                else:
+                    near, pn = nearer_of(near_model, img, a, b, dev)
+                    lines.append((f"4. Nearer-leg model: {near} ({pn:.2f})" + ("  <- weak model" if pn < 0.7 else ""),
+                                  RED if pn < 0.7 else None))
+                    result, how = sides_from_view(view, near, a, b), "direction + nearer-leg models + rule"
+                if not result and how.endswith("rule"):
+                    how = "rule can't tell (legs crossed, or front up/down)"
+                if result:
+                    side[tuple(a)], side[tuple(b)] = result
+                    lines.append((f"=> leg sides from: {how}", GREEN))
+                else:
+                    lines.append((f"=> no leg sides: {how or 'legs crossed'}", RED))
+            else:
+                lines.append(("=> no leg sides on this frame", (0, 200, 255)))
+            if arms:
+                arm_sides, _ = assign_sides([("arm", b) for b in arms], pose_people(pose, img, device=dev))
+                side.update({tuple(b): s for b, s in zip(arms, arm_sides) if s})
+                n_side = sum(1 for s in arm_sides if s)
+                lines.append((f"Arms: ready-made pose model + rule: {n_side} of {len(arms)} given a side", None))
+            out = img.copy()
+            th = max(2, img.shape[1] // 500)
+            overlay = out.copy()
+            for k, bx, poly in zip(names, boxes, polys):
+                color = {"left": BLUE, "right": ORANGE}.get(side.get(tuple(bx)), GRAY)
+                if poly is not None and len(poly) > 2:
+                    cv2.fillPoly(overlay, [poly.astype(np.int32)], color)
+                p1, p2 = tuple(int(x) for x in bx[:2]), tuple(int(x) for x in bx[2:])
+                cv2.rectangle(out, p1, p2, color, th)
+                text(out, f"{side.get(tuple(bx), '?')} {k}", (p1[0] + 4, max(p1[1] - 8, 20)), 0.5 * th, color, th)
+            out = cv2.addWeighted(overlay, 0.35, out, 0.65, 0)
+            sc = img.shape[1] / 1920
+            panel_h = int((50 * len(lines) + 90) * sc)
+            cv2.rectangle(out, (0, 0), (int(1450 * sc), panel_h), (20, 20, 20), -1)
+            text(out, f"{v.split('_')[0]}  (test video, never seen in training)", (int(16 * sc), int(48 * sc)),
+                 1.15 * sc, (200, 200, 200), 2)
+            for i, (ln, col) in enumerate(lines):
+                text(out, ln, (int(16 * sc), int((100 + 50 * i) * sc)), 1.1 * sc, col or (255, 255, 255), 2)
+            text(out, "blue = her left, orange = her right, gray = no side", (12, img.shape[0] - 16), 0.45 * th,
+                 (255, 255, 255), th)
+            if w is None:
+                w = cv2.VideoWriter(str(OUT / f"6_models_{v.split('_')[0]}.mp4"), cv2.VideoWriter_fourcc(*"avc1"),
+                                    fps, (out.shape[1], out.shape[0]))
+            if combined is None:
+                size = (out.shape[1], out.shape[0])
+                combined = cv2.VideoWriter(str(OUT / "6_models_all.mp4"), cv2.VideoWriter_fourcc(*"avc1"), 25, size)
+            w.write(out)
+            combined.write(cv2.resize(out, size))
+        w.release()
+        print(f"models video {v}: {t0:.1f}-{t0 + seconds:.1f} s", flush=True)
+    combined.release()
 
 
 def draw_frame(img, boxer, pose, models, dev):
@@ -256,6 +355,8 @@ def main():
         sheet(dev)
     if "mirrors" in what:
         mirrors()
+    if "models" in what:
+        models_video(dev)
     if "demo" in what:
         demo(dev)
 

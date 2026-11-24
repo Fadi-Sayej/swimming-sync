@@ -62,3 +62,17 @@ probably also swims in the 22-min Fukuoka final, a small swimmer overlap with th
 
 Note: the test videos are close-ups (fan uploads and a highlights clip); the training videos are
 full broadcasts with wider shots. Doha has one underwater shot.
+
+## Milestone 3 (leg height): phone videos from outside the water
+
+Club solos filmed by spectators (phones / handheld cameras from the stands or pool deck), from
+YouTube search (Instagram needs a login for browsing, docs/problems.md #31). `data/raw/phone/`,
+test only. Used only for testing the model, not re-published.
+
+| File | Source | What | Camera |
+|------|--------|------|--------|
+| `phone/bWPW03Z_pHw.mp4` | [bWPW03Z_pHw](https://youtu.be/bWPW03Z_pHw) | Artistic Swimming Solo Free 2026, Germany | close, from the stands |
+| `phone/YKuoj-y0xeU.mp4` | [YKuoj-y0xeU](https://youtu.be/YKuoj-y0xeU) | Artistic Swimming Solo Free 2025, Germany | close, from the stands |
+| `phone/voraAnhHc10.mp4` | [voraAnhHc10](https://youtu.be/voraAnhHc10) | Bianca Hofstatter (Westside), solo tech, 2022 French Open | from the stands, green water |
+| `phone/gG9zbu-2TME.mp4` | [gG9zbu-2TME](https://youtu.be/gG9zbu-2TME) | 2018 NDB Aquacades, solo swim | pool deck, outdoor |
+| `phone/zG_-YIK1p10.mp4` | [zG_-YIK1p10](https://youtu.be/zG_-YIK1p10) | Amy Campbell, solo (Chandelier) | far, across the pool (small swimmer) |

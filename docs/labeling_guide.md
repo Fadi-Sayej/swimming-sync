@@ -206,3 +206,28 @@ sides from your answers and compares them with the hand-drawn sides.
 the 473 training frames answered "can't tell" in front/back, same two questions. Here A and B are
 the outline model's leg boxes, so they can be wrong: if a box isn't on one of her legs, press 5
 (can't tell).
+
+## Leg height (milestone 3): "M3 leg height - test"
+
+61 test frames, one per screen; the gray boxes are your earlier leg boxes, only a guide.
+**Leg 1 = the leg on the image's left** (blue points), leg 2 = the other (orange points).
+
+For each leg:
+
+1. Click the points (pick the label with its key, then click):
+   - `q` / `a`: **toes** (the tip of the foot, leg 1 / leg 2)
+   - `w` / `s`: **knee**, only if the knee is out of the water
+   - `e` / `d`: **water**, where the leg goes into the water (the middle of the leg at the surface)
+2. Answer the question for each leg:
+   - Leg 1: `1` knee out, `2` knee under water, `3` not out of the water
+   - Leg 2: `4` knee out, `5` knee under water, `6` not out of the water, `7` pressed to leg 1
+     (both legs together, can't be told apart: click leg 1's points only)
+3. Submit.
+
+- Splash hides where the leg enters the water: click your best guess of the middle of the leg at the surface.
+- Leg bent: the knee is where it bends.
+- Only one leg in the picture: it is leg 1; leg 2 = "not out of the water".
+- **Whole leg out of the water** (water at or below her hip, or she is fully in the air): click the
+  water point at her **hip** (the top of the thigh). That gives 100%.
+- **Toes cut off by the edge of the picture:** click the knee and the water point only (no toes) and
+  answer "knee out" (or "knee under water"). Pass/fail still counts; the percentage can't be measured.

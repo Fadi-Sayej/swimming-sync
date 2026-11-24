@@ -153,6 +153,11 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 
 ## Still open
 
+### 31. Instagram can't be browsed without a login (2026-11-24)
+
+- **Problem:** to find phone videos (leg height goal) on Instagram, web search only returns account pages, not reel links, and yt-dlp can't list an account's reels or a hashtag (`instagram:user` marked broken, `instagram:tag` "Unable to extract data"). Single reel links do download.
+- **Fix:** pending: browse with Fadi's Instagram login (yt-dlp `--cookies-from-browser`), only with his OK.
+
 ### 30. Color rules can't find splash or keep banners out of the water (2026-11-21)
 - **Problem:** First try at water/splash/swimmer masks (step 4). Swimmer is fine (SAM 2 on her box). Splash as "white pixels in the water" marks sun reflections and white banners as splash and misses grey foam. Water from SAM 2 (points on blue pixels) also takes blue or bright banners above the pool.
 - **Why:** Foam, reflections and banners have the same colors. SAM 2 needs a box or points and doesn't know what "splash" is.

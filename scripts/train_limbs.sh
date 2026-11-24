@@ -6,6 +6,7 @@
 #   SIZE=m IMGSZ=640 BATCH=8 scripts/train_limbs.sh pose   pose model on the swimmer crops (export_pose)
 #   IMGSZ=384 BATCH=32 scripts/train_limbs.sh facing       legs front/back (facing export)
 #   IMGSZ=384 BATCH=32 scripts/train_limbs.sh view nearer  which way the legs face, nearer leg (export-view)
+#   IMGSZ=320 BATCH=16 scripts/train_limbs.sh knees        knee keypoint on leg crops (export_knees; leg height)
 # Results: experiments/limbs/output/<version>/ (weights/best.pt, results.csv, plots)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -25,6 +26,8 @@ for name in ${@:-4cls 2cls}; do
   case "$name" in
     seg) task=segment; model="yolo11${SIZE}-seg.pt" ;;
     pose*) task=pose; model="yolo11${SIZE}-pose.pt"; flip=0.5 ;;
+    knees17*) task=pose; model="yolo11${SIZE}-pose.pt"; flip=0.5; flipud=0.5; data="data/raw/datasets/m3_knees17/data.yaml" ;;
+    knees*) task=pose; model="yolo11${SIZE}-pose.pt"; flip=0.5; flipud=0.5; data="data/raw/datasets/m3_knees/data.yaml" ;;
     facing*) task=classify; model="yolo11${SIZE}-cls.pt"; flip=0.5; flipud=0.5; data="data/raw/datasets/m2_facing" ;;
     nearleg*) task=classify; model="yolo11${SIZE}-cls.pt"; data="data/raw/datasets/m2_nearleg"
       extra="scale=0 erasing=0 auto_augment=None hsv_h=0 hsv_s=0 hsv_v=0" ;;
