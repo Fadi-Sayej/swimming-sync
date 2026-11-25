@@ -153,6 +153,11 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 
 ## Still open
 
+### 32. Phone videos include deck, backstage and logo frames (2026-11-25)
+
+- **Problem:** 7 of the 30 phone-video frames picked for leg-height labels are not in the water (standing on the deck, in front of a flag, backstage, a logo screen, one underwater view). The outline model finds legs there, so they would be measured as legs out of the water (or FAIL).
+- **Fix:** the CLIP pool-shot check from the frame picker (`dataset/scene.py`) now runs in the leg-height check and video; frames under 0.7 are not measured (all 7 were 0.00-0.64, real pool frames 0.88-1.00).
+
 ### 31. Instagram can't be browsed without a login (2026-11-24)
 
 - **Problem:** to find phone videos (leg height goal) on Instagram, web search only returns account pages, not reel links, and yt-dlp can't list an account's reels or a hashtag (`instagram:user` marked broken, `instagram:tag` "Unable to extract data"). Single reel links do download.

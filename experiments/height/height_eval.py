@@ -18,7 +18,10 @@ from swimsync.dataset.export_yolo import labeled_frames, project_titles
 from swimsync.dataset.facing import _api
 from swimsync.dataset.height_labels import TITLE, parse_height
 from swimsync.height.measure import SEG, PoseKnees, measure_frame
-from swimsync.height.score import height_score
+from swimsync.dataset.scene import PoolShotClassifier
+from swimsync.height.score import height_score, with_unseen_legs
+
+MIN_POOL = 0.7  # CLIP "pool shot" probability; below it the frame is skipped (deck, backstage, logo)
 from swimsync.waterline.above_water import pick_device
 
 FOLDERS = ("test", "phone")
@@ -59,7 +62,7 @@ def main():
     api = _api()
     assert TITLE in project_titles(api), f"no project '{TITLE}'"
     lab, n_tasks = labeled_frames(api, TITLE)
-    seg, knees = YOLO(SEG), knee_finder(a.knees, dev)
+    seg, knees, pool = YOLO(SEG), knee_finder(a.knees, dev), PoolShotClassifier()
     n = defaultdict(Counter)
     diffs, point_err = defaultdict(list), defaultdict(lambda: defaultdict(list))
     for name, result in sorted(lab.items()):
@@ -71,7 +74,18 @@ def main():
         n[g]["frames"] += 1
         n[g]["pressed together"] += hand[2]["status"] == "pressed to leg 1"
         img = cv2.imread(str(path))
+        if pool.score(img) < MIN_POOL:
+            n[g]["not a pool shot (skipped)"] += 1
+            continue
         pred = [leg for leg in measure_frame(img, seg, knees, dev) if leg.toes is not None]
+        # per frame: her legs judged by hand (a leg not out of the water is a FAIL too, Nov 25)
+        statuses = [l["status"] for l in hand.values() if l["status"] in ("knee out", "knee under water", "not out of the water")]
+        model = with_unseen_legs(pred, expected=len(statuses))
+        hand_pass = sum(st == "knee out" for st in statuses)
+        model_pass = sum(q.status == "pass" for q in model)
+        n[g]["frames judged"] += 1
+        n[g]["pass/fail counts agree"] += (hand_pass == model_pass
+                                           and len(statuses) - hand_pass == sum(q.status == "fail" for q in model))
         for leg in hand.values():
             if leg["status"] not in ("knee out", "knee under water") or leg["water"] is None:
                 continue
@@ -105,8 +119,11 @@ def main():
                     diffs[g].append(abs(best.score - hs) * 100)
     print(f"'{TITLE}': {len(lab)} of {n_tasks} frames labeled; knees from: {a.knees}")
     for g, c in n.items():
-        print(f"\n{g}: {c['frames']} frames, {c['legs out']} legs out of the water "
+        print(f"\n{g}: {c['frames']} frames ({c['not a pool shot (skipped)']} not a pool shot, skipped), "
+              f"{c['legs out']} legs out of the water "
               f"(pressed together on {c['pressed together']} frames)")
+        print(f"  per frame, number of legs passing / failing agrees on {c['pass/fail counts agree']} of "
+              f"{c['frames judged']} frames ({100 * c['pass/fail counts agree'] / max(c['frames judged'], 1):.0f}%)")
         print(f"  outline model found {c['leg found']} of {c['legs out']} legs")
         print(f"  no knee found on {c['no knee found']} (knee out by hand on {c['no knee found, knee out by hand']})")
         print(f"  knee out / under agrees on {c['out/under agree']} of {c['judged']} "

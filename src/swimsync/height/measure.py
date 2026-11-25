@@ -8,6 +8,16 @@ SEG = "experiments/limbs/output/seg_b3/weights/best.pt"
 KNEES = (13, 14)  # COCO left / right knee
 
 
+def inside_leg(point, mask, grow=15):
+    """Is the point on this leg: inside its outline grown by `grow` px?"""
+    x, y = int(point[0]), int(point[1])
+    h, w = mask.shape
+    if not (0 <= x < w and 0 <= y < h):
+        return False
+    y1, y2, x1, x2 = max(y - grow, 0), min(y + grow + 1, h), max(x - grow, 0), min(x + grow + 1, w)
+    return bool(mask[y1:y2, x1:x2].any())
+
+
 def pick_knee(people, mask, conf_min=0.3, grow=15):
     """(x, y, conf) of the surest COCO knee inside the leg outline (grown by `grow` px), or None."""
     grown = cv2.dilate(mask.astype(np.uint8), np.ones((2 * grow + 1, 2 * grow + 1), np.uint8)).astype(bool)
@@ -71,7 +81,7 @@ class OurKnees:
 
         h, w = img.shape[:2]
         out = []
-        for box, _ in legs:
+        for box, mask in legs:
             x1, y1, x2, y2 = leg_crop(box, w, h)
             r = self.model.predict(img[y1:y2, x1:x2], imgsz=320, conf=0.1, verbose=False, device=self.device)[0]
             if r.keypoints is None or len(r.boxes) == 0:
@@ -80,5 +90,8 @@ class OurKnees:
             kps = r.keypoints.data[int(r.boxes.conf.argmax())]
             kx, ky, kc = (max((kps[i].tolist() for i in KNEES), key=lambda k: k[2]) if len(kps) == 17
                           else kps[0].tolist())
-            out.append((kx + x1, ky + y1, kc) if kc >= self.conf_min else None)
+            knee = (kx + x1, ky + y1, kc)
+            # the crop may show the other leg too: keep the knee only if it is on this leg
+            grow = max(15, round(0.05 * max(box[2] - box[0], box[3] - box[1])))  # 5% of the leg, at least 15 px
+            out.append(knee if kc >= self.conf_min and (mask is None or inside_leg(knee, mask, grow)) else None)
         return out

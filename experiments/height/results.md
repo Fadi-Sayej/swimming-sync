@@ -47,3 +47,59 @@ swimsync.dataset.export_knees`). Same check as above (114 test leg boxes, 105 kn
   epochs=60 patience=20 batch=16 fliplr=0.5 flipud=0.5 optimizer=AdamW lr0=0.0002 seed=0 device=mps \
   project=$PWD/experiments/limbs/output name=knees17
 ```
+
+## Leg height on the test frames, 2026-11-25
+
+`python experiments/height/height_eval.py --knees ours` against "M3 leg height - test" (85 of 91
+frames labeled: 61 test frames from the 4 test videos + 30 phone-video frames; 4 skipped as not a
+pool shot by the CLIP check, `MIN_POOL = 0.7`). Raw output: `experiments/height/output/eval_ours.txt`.
+
+**Each leg you clicked** (toes/knee/water), matched to the nearest leg the outline model found:
+
+| | New pools | Budapest | Phone videos |
+|---|---|---|---|
+| Legs out of the water (with points) | 45 | 18 | 15 |
+| Found by the outline model | 35 (78%) | 17 | 14 |
+| Knee out / under agrees with you | **29 / 35 (83%)** | 12 / 17 (71%) | **13 / 14 (93%)** |
+| (same with the ready-made knees) | 16 / 35 (46%) | 6 / 17 (35%) | 7 / 14 (50%) |
+| Score difference when both say knee out | 7.5 points (22 legs) | 3.4 (9) | 4.7 (9) |
+| Toes within 20% of the leg | 96% | 100% | 100% |
+| Water point within 20% | 91% | 94% | 93% |
+| Knee within 20% | 76% | 100% | 93% |
+
+All the mistakes on these legs are false FAILs (knee out by hand, under by the model); all the
+hand FAILs were answered without points (legs under water, or knee under with only shins up), so
+false passes only show per frame:
+
+**Per frame, number of legs passing agrees with you: 36 of 81 frames (44%)** (a leg not seen out
+of the water counts as FAIL). Why the others disagree (`scratchpad` diagnosis):
+- 21 frames: the model passes a leg you failed. Mostly legs standing at about knee height: the
+  shins are up, the knee just under the surface, and the knee model puts a knee just above the
+  waterline. Twice the "leg" is an arm next to her head.
+- 15 frames: the model finds one leg where you clicked two (legs pressed together become one
+  outline; the second leg then counts as FAIL). This is the open "legs pressed together" question.
+
+**Tried, no help:** a higher knee-confidence cut (0.5 to 0.95) or requiring the knee to sit further
+above the water (5% to 45% of the leg): every setting trades false passes for false fails; chosen on
+half the frames, the other half scores 62% / 39% (cut) and 62% / 39% (position). The model's knee
+sits at the same place on passed and failed legs (median 84% vs 89% of the way from toes to water):
+the boundary (water at knee height) is exactly where most of these legs are.
+
+**Reading:** where a knee is clearly out, the model finds it and the percentage is within ~3-8
+points of yours; the phone videos are as good as the broadcasts. What fails is the boundary case
+(water at the knee), which needs training examples of it: legs with the knee just under the
+surface. Next: label such frames from the training videos (Fri/Sat) and retrain the knee model.
+
+### Knee on the wrong leg, 2026-11-25
+
+In the phone videos both legs' lines sometimes met at one knee: the crop around one leg also shows
+the other, and our knee model took that leg's knee. A knee now counts only on its own leg (inside
+its outline grown by 5% of the leg, at least 15 px; `measure.inside_leg`). Same test frames:
+knee out / under 83% / 71% / 86% (new pools / Budapest / phone; one phone leg fewer), per frame 36 of
+81 as before. A 15 px margin alone cost Budapest 71% -> 65% (the knee sits at the outline's edge).
+
+### Next: labels at the boundary
+
+"M3 leg height - train" (`python -m swimsync.dataset.height_labels train`): 215 frames from the 18
+training videos (about 8 per video near the boundary: the model FAILs a leg or puts the knee in
+the last 30% before the water), pre-filled with the model's points and answers.

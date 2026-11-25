@@ -218,7 +218,8 @@ For each leg:
    - `q` / `a`: **toes** (the tip of the foot, leg 1 / leg 2)
    - `w` / `s`: **knee**, only if the knee is out of the water
    - `e` / `d`: **water**, where the leg goes into the water (the middle of the leg at the surface)
-2. Answer the question for each leg:
+2. Answer the question for each leg ("knee under water" also when the whole leg is under: both are
+   FAIL; click toes + water only if part of the leg shows):
    - Leg 1: `1` knee out, `2` knee under water, `3` not out of the water
    - Leg 2: `4` knee out, `5` knee under water, `6` not out of the water, `7` pressed to leg 1
      (both legs together, can't be told apart: click leg 1's points only)
@@ -231,3 +232,15 @@ For each leg:
   water point at her **hip** (the top of the thigh). That gives 100%.
 - **Toes cut off by the edge of the picture:** click the knee and the water point only (no toes) and
   answer "knee out" (or "knee under water"). Pass/fail still counts; the percentage can't be measured.
+
+### Training frames: "M3 leg height - train"
+
+215 frames from the training videos, most with the water near knee height. Same questions as the
+test project, but **every frame is pre-filled by the model** (its points and answers), so:
+
+- Drag a point that is wrong; delete one that shouldn't be there (select it, Backspace); add a missing one.
+- Check both answers: the model is weakest at the boundary (knee just above vs just under).
+- "knee under water" with part of the leg showing: keep or click **toes + water** (these teach the
+  model what a knee under the surface looks like). Whole leg under: no points.
+- Deck, backstage or logo frames: Skip.
+

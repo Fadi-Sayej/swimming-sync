@@ -28,3 +28,13 @@ def test_pick_knee_ignores_knees_outside_the_leg():
 
 def test_pick_knee_ignores_unsure_knees():
     assert pick_knee([person([(120, 150, 0.2)])], leg_mask()) is None
+
+
+from swimsync.height.measure import inside_leg  # noqa: E402
+
+
+def test_a_knee_on_the_other_leg_is_not_this_legs_knee():
+    m = leg_mask()  # columns 100-140
+    assert inside_leg((120, 150), m)
+    assert not inside_leg((200, 150), m)       # the other leg, 60 px away
+    assert inside_leg((150, 150), m, grow=15)  # just outside the outline: still this leg

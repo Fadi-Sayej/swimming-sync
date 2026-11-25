@@ -1,7 +1,7 @@
 """Rules from a leg's outline and knee to pass/fail and the share of the leg out of the water.
 
-Score (agreed Nov 24): knee under water = FAIL; knee out = the share of the leg, toes to hip, out
-of the water. The hip is usually hidden, so the thigh counts as long as toes-to-knee: water at the
+Score (agreed Nov 24): knee under water = FAIL (also a leg not out of the water at all, Nov 25);
+knee out = the share of the leg, toes to hip, out of the water. The hip is usually hidden, so the thigh counts as long as toes-to-knee: water at the
 knee = 50%, halfway up the thigh = 75%, at the hip = 100%.
 """
 from dataclasses import dataclass
@@ -79,3 +79,13 @@ def judge_leg(toes, water, knee, knee_conf, toes_cut=False):
     if knee is None or not knee_is_out(toes, knee, water):
         return LegHeight("fail", toes=toes, knee=knee, water=water, knee_conf=knee_conf)
     return LegHeight("pass", None if toes_cut else height_score(toes, knee, water), toes, knee, water, knee_conf)
+
+
+def with_unseen_legs(legs, expected=2):
+    """Add a FAIL for each of her legs not seen out of the water (Fadi, Nov 25: whole leg under = FAIL).
+
+    Seen = judged (pass or fail); outlines too small to judge ("no score") don't count. An added
+    leg has no points (nothing to draw).
+    """
+    seen = sum(1 for leg in legs if leg.status in ("pass", "fail"))
+    return list(legs) + [LegHeight("fail") for _ in range(max(expected - seen, 0))]

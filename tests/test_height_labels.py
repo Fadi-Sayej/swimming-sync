@@ -32,3 +32,37 @@ def test_parse_reads_points_in_pixels_and_status():
 def test_parse_missing_leg_answer_is_none_status():
     r = [choice("leg1", "knee out")]
     assert parse_height(r)[2]["status"] is None
+
+
+from swimsync.dataset.height_labels import prefill_result  # noqa: E402
+from swimsync.height.score import LegHeight  # noqa: E402
+
+
+def test_prefill_puts_model_points_on_legs_left_to_right():
+    right = LegHeight("pass", 0.6, toes=(800, 100), knee=(800, 300), water=(800, 400), box=(750, 50, 850, 420))
+    left = LegHeight("fail", toes=(200, 100), water=(200, 400), box=(150, 50, 250, 420))
+    r = prefill_result([right, left], 1000, 500)
+    names = {x["value"]["keypointlabels"][0]: (x["value"]["x"], x["value"]["y"]) for x in r if x["type"] == "keypointlabels"}
+    assert names["1 toes"] == (20.0, 20.0) and names["2 knee"] == (80.0, 60.0)
+    assert "1 knee" not in names
+    choices = {x["from_name"]: x["value"]["choices"][0] for x in r if x["type"] == "choices"}
+    assert choices == {"leg1": "knee under water", "leg2": "knee out"}
+
+
+def test_prefill_with_one_leg_marks_leg_2_under_water():
+    leg = LegHeight("pass", 0.6, toes=(800, 100), knee=(800, 300), water=(800, 400), box=(750, 50, 850, 420))
+    choices = {x["from_name"]: x["value"]["choices"][0] for x in prefill_result([leg], 1000, 500) if x["type"] == "choices"}
+    assert choices == {"leg1": "knee out", "leg2": "knee under water"}
+
+
+from swimsync.dataset.height_labels import near_boundary  # noqa: E402
+
+
+def test_near_boundary_when_the_knee_is_close_to_the_water():
+    assert near_boundary(LegHeight("pass", 0.55, toes=(0, 0), knee=(0, 90), water=(0, 100)))
+    assert not near_boundary(LegHeight("pass", 0.9, toes=(0, 0), knee=(0, 40), water=(0, 100)))
+
+
+def test_near_boundary_when_the_leg_fails():
+    assert near_boundary(LegHeight("fail", toes=(0, 0), water=(0, 100)))
+    assert not near_boundary(LegHeight("no score"))

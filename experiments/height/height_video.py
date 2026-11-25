@@ -17,6 +17,10 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "limbs"))
 from meeting_nov24 import clip_starts, text  # noqa: E402
 
 from swimsync.height.measure import SEG, OurKnees, PoseKnees, measure_frame  # noqa: E402
+from swimsync.dataset.scene import PoolShotClassifier  # noqa: E402
+from swimsync.height.score import with_unseen_legs  # noqa: E402
+
+MIN_POOL = 0.7  # CLIP "pool shot" probability; below it the frame isn't measured (deck, backstage, logo)
 from swimsync.waterline.above_water import pick_device  # noqa: E402
 
 OUT = Path("experiments/height/output")
@@ -27,6 +31,8 @@ def result_text(leg):
     if leg.status == "pass":
         return (f"knee out: {100 * leg.score:.0f}%" if leg.score is not None else "knee out (toes off the picture)"), GREEN
     if leg.status == "fail":
+        if leg.toes is None:
+            return "not out of the water: FAIL", RED
         return ("knee under water: FAIL" if leg.knee else "no knee found: FAIL"), RED
     return None, None
 
@@ -45,7 +51,11 @@ def draw(img, legs, title):
         msg, col = result_text(leg)
         if msg is None:
             continue
+        conf = "" if leg.knee_conf is None else f"  (knee {leg.knee_conf:.2f} sure)"
+        lines.append((f"leg {i}: {msg}{conf}", col))
         pts = [p for p in (leg.toes, leg.knee, leg.water) if p is not None]
+        if not pts:
+            continue  # leg not seen: in the panel only
         cv2.polylines(out, [np.array(pts, np.int32)], False, col, th)
         for p, c in ((leg.toes, WHITE), (leg.knee, YELLOW), (leg.water, CYAN)):
             if p is not None:
@@ -53,12 +63,10 @@ def draw(img, legs, title):
                 cv2.circle(out, (int(p[0]), int(p[1])), round(12 * sc) + 2, (0, 0, 0), max(1, th // 2))
         x1, y1 = int(leg.box[0]), int(leg.box[1])
         text(out, f"leg {i}: {msg}", (x1, max(y1 - 12, round(40 * sc))), 1.0 * sc, col, 2)
-        conf = "" if leg.knee_conf is None else f"  (knee {leg.knee_conf:.2f} sure)"
-        lines.append((f"leg {i}: {msg}{conf}", col))
     h = round((50 * max(len(lines), 1) + 110) * sc)
     cv2.rectangle(out, (0, 0), (round(1250 * sc), h), (20, 20, 20), -1)
     text(out, title, (round(16 * sc), round(46 * sc)), 1.1 * sc, (200, 200, 200), 2)
-    for j, (ln, col) in enumerate(lines or [("no leg out of the water", GRAY)]):
+    for j, (ln, col) in enumerate(lines or [("not a pool shot: not measured", GRAY)]):
         text(out, ln, (round(16 * sc), round((96 + 50 * j) * sc)), 1.1 * sc, col, 2)
     text(out, "white = toes, yellow = knee, cyan = enters the water; 50% = water at the knee, 100% = at the hip",
          (12, img.shape[0] - 16), 0.85 * sc, WHITE, 2)
@@ -80,7 +88,7 @@ def summary_card(shape, title, results):
     return card
 
 
-def run_clip(path, start, seconds, seg, knees, dev, name, combined=None):
+def run_clip(path, start, seconds, seg, knees, dev, name, combined=None, pool=None):
     cap = cv2.VideoCapture(str(path))
     fps = cap.get(cv2.CAP_PROP_FPS) or 25
     cap.set(cv2.CAP_PROP_POS_MSEC, start * 1000)
@@ -90,7 +98,10 @@ def run_clip(path, start, seconds, seg, knees, dev, name, combined=None):
         ok, img = cap.read()
         if not ok:
             break
-        legs = measure_frame(img, seg, knees, dev)
+        if pool is not None and pool.score(img) < MIN_POOL:
+            legs = []  # not a pool shot: nothing measured, no FAILs
+        else:
+            legs = with_unseen_legs(measure_frame(img, seg, knees, dev))
         results.append(legs)
         frame = draw(img, legs, title)
         if writer is None:
@@ -120,12 +131,13 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     seg = YOLO(SEG)
     knees = OurKnees(device=dev) if a.knees == "ours" else PoseKnees(device=dev)
+    pool = PoolShotClassifier()
     if a.video:
-        run_clip(a.video, a.start, a.seconds, seg, knees, dev, Path(a.video).stem)
+        run_clip(a.video, a.start, a.seconds, seg, knees, dev, Path(a.video).stem, pool=pool)
         return
     combined = cv2.VideoWriter(str(OUT / "height_all.mp4"), cv2.VideoWriter_fourcc(*"avc1"), 25, (1920, 1080))
     for v, t0 in clip_starts(a.seconds).items():
-        run_clip(f"data/raw/test/{v}.mp4", t0, a.seconds, seg, knees, dev, v.split("_")[0], combined)
+        run_clip(f"data/raw/test/{v}.mp4", t0, a.seconds, seg, knees, dev, v.split("_")[0], combined, pool=pool)
     combined.release()
 
 

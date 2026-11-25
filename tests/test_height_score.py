@@ -86,3 +86,21 @@ def test_toes_inside_the_frame():
 def test_cut_toes_still_pass_but_without_a_score():
     leg = judge_leg((0, 0), (0, 150), (0, 100), 0.9, toes_cut=True)
     assert leg.status == "pass" and leg.score is None
+
+
+from swimsync.height.score import LegHeight, with_unseen_legs  # noqa: E402
+
+
+def test_a_leg_not_seen_out_of_the_water_is_a_fail():
+    legs = with_unseen_legs([LegHeight("pass", 0.7, (0, 0), (0, 100), (0, 150), 0.9)])
+    assert [leg.status for leg in legs] == ["pass", "fail"]
+    assert legs[1].toes is None and legs[1].knee is None
+
+
+def test_no_leg_seen_is_two_fails():
+    assert [leg.status for leg in with_unseen_legs([])] == ["fail", "fail"]
+
+
+def test_legs_without_a_score_do_not_count_as_seen():
+    legs = with_unseen_legs([LegHeight("no score")])
+    assert [leg.status for leg in legs] == ["no score", "fail", "fail"]

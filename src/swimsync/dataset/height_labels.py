@@ -6,7 +6,9 @@ knee out / knee under water / not out of the water. Leg 2 can also be "pressed t
 together, seen as one). The hand-drawn leg boxes are shown as a guide.
 
     python -m swimsync.dataset.height_labels              # Label Studio "M3 leg height - test"
-    python -m swimsync.dataset.height_labels add FOLDER   # add frames from images/FOLDER (Instagram)
+    python -m swimsync.dataset.height_labels add FOLDER   # add frames from images/FOLDER (phone videos)
+    python -m swimsync.dataset.height_labels train [N]    # "M3 leg height - train": ~N frames from the
+                                                          # training videos, pre-filled by the model
 """
 
 import random
@@ -14,6 +16,7 @@ import sys
 from pathlib import Path
 
 TITLE = "M3 leg height - test"
+TRAIN_TITLE = "M3 leg height - train"
 ROOT = Path("data/raw/frames/m2")
 STATUSES = ("knee out", "knee under water", "not out of the water")
 LEG_COLORS = {"1": "#2a78d6", "2": "#eb6834"}
@@ -68,6 +71,90 @@ def parse_height(result):
     return legs
 
 
+def prefill_result(legs, w, h):
+    """Label Studio points and answers from the model's LegHeights (up to 2 judged legs, left to right).
+
+    A judged leg gets its toes / knee / water points and "knee out" (pass) or "knee under water"
+    (fail); a missing second leg gets "knee under water" (a leg not out of the water is a FAIL).
+    """
+    judged = sorted((leg for leg in legs if leg.status in ("pass", "fail") and leg.toes is not None),
+                    key=lambda leg: leg.box[0] + leg.box[2])[:2]
+    out = []
+    for i in (1, 2):
+        leg = judged[i - 1] if i <= len(judged) else None
+        for part in ("toes", "knee", "water"):
+            p = getattr(leg, part) if leg else None
+            if p is not None:
+                out.append({"from_name": "points", "to_name": "image", "type": "keypointlabels",
+                            "original_width": w, "original_height": h,
+                            "value": {"x": 100 * p[0] / w, "y": 100 * p[1] / h, "width": 0.6,
+                                      "keypointlabels": [f"{i} {part}"]}})
+        answer = "knee out" if leg is not None and leg.status == "pass" else "knee under water"
+        out.append({"from_name": f"leg{i}", "to_name": "image", "type": "choices", "value": {"choices": [answer]}})
+    return out
+
+
+def near_boundary(leg, start=0.7):
+    """A judged leg with the water near its knee: FAIL, or the knee in the last 30% before the water."""
+    import numpy as np
+
+    if leg.status == "fail":
+        return True
+    if leg.status != "pass" or leg.knee is None:
+        return False
+    t, k, w = (np.asarray(p, float) for p in (leg.toes, leg.knee, leg.water))
+    v = w - t
+    return bool(v @ v) and (k - t) @ v / (v @ v) >= start
+
+
+def train_project(n_total=300, per_video_scan=80, min_gap=2.0, min_pool=0.7):
+    """Frames from the training videos where the model sees a leg, half of them near the boundary."""
+    import json
+
+    import cv2
+    import numpy as np
+    from ultralytics import YOLO
+
+    from swimsync.dataset.facing import pick_spread
+    from swimsync.height.measure import SEG, OurKnees, measure_frame
+    from swimsync.waterline.above_water import pick_device
+
+    dev = pick_device()
+    seg, knees = YOLO(SEG), OurKnees(device=dev)
+    scans = [json.loads(p.read_text()) for p in sorted((ROOT / "scan").glob("*.json"))]
+    scans = [s for s in scans if Path(s["video"]).parent.name != "test"]
+    per_video = max(n_total // len(scans), 1)
+    img_dir = (ROOT / "images" / "height_train").resolve()
+    img_dir.mkdir(parents=True, exist_ok=True)
+    tasks = []
+    for s in scans:
+        times = pick_spread([c["t"] for c in s["candidates"] if c.get("pool", 1) >= min_pool], per_video_scan, min_gap)
+        cap, found = cv2.VideoCapture(s["video"]), []
+        for t in times:
+            cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000)
+            ok, frame = cap.read()
+            if not ok:
+                continue
+            legs = [leg for leg in measure_frame(frame, seg, knees, dev) if leg.status in ("pass", "fail")]
+            if legs:
+                found.append((any(near_boundary(leg) for leg in legs), t, frame, legs))
+        edge = [f for f in found if f[0]]
+        rest = [f for f in found if not f[0]]
+        pick = edge[:: max(len(edge) // (per_video // 2 or 1), 1)][: per_video // 2 or 1]
+        pick += rest[:: max(len(rest) // max(per_video - len(pick), 1), 1)][: per_video - len(pick)]
+        for _, t, frame, legs in pick:
+            name = f"{Path(s['video']).stem}_{t:07.1f}s.jpg"
+            cv2.imwrite(str(img_dir / name), frame, [cv2.IMWRITE_JPEG_QUALITY, 92])
+            h, w = frame.shape[:2]
+            task = height_task(f"/data/local-files/?d=images/height_train/{name}", [leg.box for leg in legs], w, h)
+            task["predictions"][0]["result"] += prefill_result(legs, w, h)
+            task["predictions"][0]["model_version"] = "outline model + our knees"
+            tasks.append(task)
+        print(f"{Path(s['video']).name}: {len(found)} frames with a leg, picked {len(pick)} "
+              f"({sum(1 for f in pick if f[0])} near the boundary)", flush=True)
+    return tasks, img_dir
+
+
 def _test_frames():
     """[(image path, hand leg boxes, w, h)] for the 4-class test frames with at least one leg box."""
     import cv2
@@ -95,6 +182,18 @@ def main():
 
     api = _api()
     titles = project_titles(api)
+    if sys.argv[1:2] == ["train"]:
+        if TRAIN_TITLE in titles:
+            print(f"'{TRAIN_TITLE}' already exists (id {titles[TRAIN_TITLE]}); not importing again.")
+            return
+        tasks, img_dir = train_project(int(sys.argv[2]) if len(sys.argv) > 2 else 300)
+        random.Random(0).shuffle(tasks)
+        pid = api.post("/api/projects", {"title": TRAIN_TITLE, "label_config": height_config()})["id"]
+        api.post("/api/storages/localfiles", {"project": pid, "title": "frames", "path": str(img_dir),
+                                              "use_blob_urls": False})
+        api.post(f"/api/projects/{pid}/import", tasks)
+        print(f"'{TRAIN_TITLE}': project {pid}, {len(tasks)} frames")
+        return
     if sys.argv[1:2] == ["add"]:
         folder = sys.argv[2]
         img_dir = (ROOT / "images" / folder).resolve()

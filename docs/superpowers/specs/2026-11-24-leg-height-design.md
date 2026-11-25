@@ -18,7 +18,7 @@ Plus a few numbers that show the measurement is right (checked against hand labe
 
 Per leg, per frame:
 
-- **Knee under water: FAIL.**
+- **Knee under water: FAIL**, also when the whole leg is under the water (Fadi, Nov 25).
 - **Knee out of the water:** the share of the whole leg (toes to hip) that is out of the water.
   Toes-to-knee counts as half the leg, so: water at the knee = 50%, water halfway up the thigh =
   75%, water at the hip (whole leg out) = 100%.
@@ -96,8 +96,6 @@ visible); it is part of the definition. *(my call)*
 ## My calls (to check)
 
 - Solos only; teams later.
-- A leg that isn't out of the water at all gets no score (not FAIL); FAIL is only for a leg that is
-  out but with the knee under water.
 - In the video, besides the per-frame score, a summary per clip: share of frames that pass and the
   average score.
 
