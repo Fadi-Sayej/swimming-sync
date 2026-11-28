@@ -43,15 +43,35 @@ class PoseKnees:
         return [pick_knee(people, m) for _, m in legs]
 
 
+def _covered(a, b):
+    """Share of the smaller of two outlines that lies inside the other."""
+    small = min(a.sum(), b.sum())
+    return float(np.logical_and(a, b).sum() / small) if small else 0.0
+
+
+def drop_repeats(legs, share=0.5):
+    """[(box, mask, conf)] without the legs mostly (> `share`) inside a surer leg's outline.
+
+    The outline model sometimes outlines one leg twice (the whole leg and its lower part), or a
+    pressed pair and one of its legs; their boxes overlap too little for YOLO's own check (box
+    overlap 0.7), so the video showed a third leg (problems #39).
+    """
+    kept = []
+    for leg in sorted(legs, key=lambda leg: -leg[2]):
+        if all(_covered(leg[1], k[1]) <= share for k in kept):
+            kept.append(leg)
+    return kept
+
+
 def leg_outlines(img, seg_model, device, conf=0.25):
     """[(box, mask)] of the outline model's legs, masks at image size, sorted left to right."""
     r = seg_model.predict(img, imgsz=960, conf=conf, retina_masks=True, verbose=False, device=device)[0]
     if r.masks is None:
         return []
-    legs = [(tuple(b), m.astype(bool)) for c, b, m in zip(r.boxes.cls.tolist(), r.boxes.xyxy.tolist(),
-                                                         r.masks.data.cpu().numpy())
+    legs = [(tuple(b), m.astype(bool), s) for c, b, m, s in zip(r.boxes.cls.tolist(), r.boxes.xyxy.tolist(),
+                                                               r.masks.data.cpu().numpy(), r.boxes.conf.tolist())
             if seg_model.names[int(c)] == "leg"]
-    return sorted(legs, key=lambda bm: bm[0][0] + bm[0][2])
+    return sorted(((b, m) for b, m, _ in drop_repeats(legs)), key=lambda bm: bm[0][0] + bm[0][2])
 
 
 def measure_frame(img, seg_model, knee_finder, device, conf=0.25):

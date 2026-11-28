@@ -153,6 +153,13 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 
 ## Still open
 
+### 39. Three legs in the video: the same leg outlined twice (2026-11-28)
+
+- **Problem:** The leg height videos sometimes showed 3 legs. In the 6 video clips, 49 of 756 frames had 3 or more "legs", and in 48 of them two outlines overlap: the same leg outlined twice (the whole leg and its lower part), or a pressed pair plus one of its legs.
+- **Why:** YOLO drops a repeated detection only when the two boxes overlap by 0.7 or more; a partial outline's box overlaps the whole leg's box less than that.
+- **Fix:** `measure.drop_repeats`: a leg mostly (over half) inside a surer leg's outline is dropped (3 tests). Clips: 49 -> 1 frame with 3+ legs. Test frames: legs passing/failing agree on 46 of 81 (39 before), false passes 20 -> 15 frames.
+- **Tried, no help (arms taken as legs):** letting the arm label win when the outline model is surer it's an arm fixes 4 arms but drops 2 real legs (the model gives both labels to one limb); the knee model's own "this is a leg" confidence overlaps too (real legs median 0.68, others 0.60). Telling arms from legs needs a better outline model (more arm examples).
+
 ### 38. A leg cut off at the bottom of the picture gets the picture edge as its water point (2026-11-28)
 
 - **Problem:** In close-ups (paris2026 video, 44-54 s) the legs run off the bottom of the picture before they reach the water. The outline's lowest point is the picture edge, so that becomes "enters the water", and the knee near it is judged under water: a FAIL for a leg that may be out.

@@ -139,3 +139,27 @@ So the outline model's arms-as-legs now cost about as much as the knee itself.
 
 Videos re-rendered with `knees17c` (`height_video.py`, and `--video data/raw/phone/bWPW03Z_pHw.mp4`
 / `voraAnhHc10.mp4 --start 40 --seconds 12`).
+
+### Three legs: one leg outlined twice, 2026-11-28
+
+The videos sometimes showed 3 legs. In the 6 clips (every 2nd frame, 756 frames) 49 frames had 3 or
+more legs; in 48 of them two outlines overlap: the same leg outlined twice (whole leg + lower part)
+or a pressed pair plus one of its legs. YOLO's own repeat check needs boxes overlapping 0.7. Now a leg
+mostly inside a surer leg's outline is dropped (`measure.drop_repeats`): 49 -> 1 frame with 3+ legs.
+
+Same test frames, `knees17c` (raw output `experiments/height/output/eval_knees17c_norepeat.txt`):
+
+| | New pools | Budapest | Phone | All |
+|---|---|---|---|---|
+| Per frame, legs passing / failing agree | 28/42 (was 25) | 7/17 (5) | 11/22 (9) | **46/81 (57%)** (39) |
+| Frames where the model passes a leg Fadi failed | 5 | 3 | 7 | 15 (20) |
+| Per leg, knee out / under agrees | 31/35 | 10/17 | 11/14 | 52/66 (79%) |
+
+**Why the other 35 frames disagree** (one frame can have several causes):
+
+| Cause | Frames | What it needs |
+|---|---|---|
+| The model passes something Fadi didn't click: an arm, a body, or a leg Fadi failed | 12 | a better outline model (arms vs legs); no rule found (problems #39) |
+| Knee out by hand, the model says under: 10 legs with the knee placed at or past the water (a few pixels; Budapest close-ups), 4 with no knee | 10 | the half-knee rule (Assaf), more boundary labels |
+| Legs pressed together: 6 labeled "pressed", 3 labeled as two touching legs that the outline model sees as one | 9 | Assaf's answer on pressed legs |
+| The outline model missed a leg that is out (one bent leg next to a straight one) | 6 | a better outline model |
