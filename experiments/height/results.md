@@ -103,3 +103,39 @@ knee out / under 83% / 71% / 86% (new pools / Budapest / phone; one phone leg fe
 "M3 leg height - train" (`python -m swimsync.dataset.height_labels train`): 215 frames from the 18
 training videos (about 8 per video near the boundary: the model FAILs a leg or puts the knee in
 the last 30% before the water), pre-filled with the model's points and answers.
+
+## Knee model retrained on Fadi's boundary labels, 2026-11-28
+
+Fadi checked and submitted 178 of the 215 frames (Claude pre-filled them; 37 skipped as unsure).
+Usable legs: 160 "knee out" with the knee clicked, 65 "knee under water" (`python -m
+swimsync.dataset.export_knees height`). Each is cropped around the outline model's leg box that holds
+its toes and water points (as when the knee model runs), or around the clicks if the model missed it.
+
+- `knees17b`: the 289 M2 knee crops + these 225 legs.
+- `knees17c`: the same + 47 "no leg here" crops (`export_knees height noleg`): the outline model's
+  other boxes on frames where Fadi accounted for every leg: arms, hands, bodies, legs under water.
+
+Same training as `knees17` (yolo11m-pose, 17-point layout, `optimizer=AdamW lr0=0.0002`, 60 rounds,
+`name=knees17b` / `knees17c`). Checked on the same test frames (raw output:
+`experiments/height/output/eval_knees17*.txt`, `knee_check_17c.txt`):
+
+| | `knees17` | `knees17b` | **`knees17c`** |
+|---|---|---|---|
+| Per frame, legs passing / failing agree | 36 / 81 | 38 / 81 | **39 / 81** |
+| ... new pools / Budapest / phone | 20/42, 8/17, 8/22 | 23/42, 6/17, 9/22 | 25/42, 5/17, 9/22 |
+| Frames where the model passes a leg Fadi failed | 23 | 22 | **20** |
+| Per leg, knee out / under agrees (new pools / Budapest / phone) | 29/35, 12/17, 12/14 | 29/35, 12/17, 11/14 | 31/35, 10/17, 11/14 |
+| Score difference when both say knee out (new pools / Budapest / phone) | 7.5 / 3.4 / 4.7 | 5.8 / 2.8 / 3.6 | 4.7 / 3.4 / 4.3 |
+| Knee check (114 M2 test legs): knee out / not agrees | 76% | 78% | **82%** |
+| ... knee within 10% / 20% of the leg | 48% / 76% | 60% / 83% | 56% / 85% |
+
+**Reading:** the new labels mostly made the knee more accurate; pass/fail per frame moved a little
+(36 -> 39 of 81). `knees17c` is now the default (`OurKnees`); Budapest (close-ups, 17 frames) lost 2 legs
+and 3 frames, new pools gained 2 legs and 5 frames. The frames where the model passes a leg Fadi
+failed (22 with `knees17b`) are: 8 not a leg (an arm, a body flat at the surface, a far swimmer),
+6 a knee at the waterline, 4 legs pressed together (counted as one leg by hand, two by the model:
+the open question for Assaf), 3 an extra "leg" from the outline model, 1 the same leg found twice.
+So the outline model's arms-as-legs now cost about as much as the knee itself.
+
+Videos re-rendered with `knees17c` (`height_video.py`, and `--video data/raw/phone/bWPW03Z_pHw.mp4`
+/ `voraAnhHc10.mp4 --start 40 --seconds 12`).

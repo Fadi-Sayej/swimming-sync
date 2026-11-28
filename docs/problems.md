@@ -153,6 +153,40 @@ Video: Worlds 2025 Singapore solo, underwater side camera that pans sideways (`d
 
 ## Still open
 
+### 38. A leg cut off at the bottom of the picture gets the picture edge as its water point (2026-11-28)
+
+- **Problem:** In close-ups (paris2026 video, 44-54 s) the legs run off the bottom of the picture before they reach the water. The outline's lowest point is the picture edge, so that becomes "enters the water", and the knee near it is judged under water: a FAIL for a leg that may be out.
+- **Why:** `leg_ends` takes the outline's end farthest from the toes as the water point; only a cut at the toes end is checked (`toes_cut`).
+- **Fix:** Not changed. On the test frames only 11 of 126 legs have their water end at the picture edge: 8 pass anyway (the knee is found above the edge) and of the 2 FAILs one is right (Fadi: knee under water) and one is an arm. A "can't tell" rule would turn that right FAIL into no answer. Revisit if close-up videos matter.
+
+### 37. Most false passes are arms, not knees; a clicked leg exported as "no leg" (2026-11-28)
+
+- **Problem:** Retrained on Fadi's 225 boundary legs (`knees17b`), the knee is placed better (within 10% of the leg: 48% -> 60%) but the model still passes a leg Fadi failed on 22 of 81 test frames (23 before). On 8 of the 15 where a leg is out, the "leg" is an arm, a body flat at the surface or a far swimmer. While adding "no leg here" crops for those, 3 legs Fadi clicked were exported as "no leg": the outline model framed them short, so the crop used a box around the clicks and the model's box counted as unused.
+- **Why:** The outline model confuses arms with legs, and the knee model then finds an elbow. In the export, only the model's own boxes were marked as used.
+- **Fix:** Every leg's box counts as used, whichever it came from (`test_no_leg_crops_skip_a_model_box_over_a_clicked_leg`). 47 "no leg here" crops (arms, hands, bodies, legs under water) go into `m3_knees17c`, so the knee model learns to give no knee there.
+
+### 36. Guide boxes get in the way of clicking points (2026-11-28)
+
+- **Problem:** In "M3 leg height - train" the grey leg boxes from the model catch clicks meant for the toes, knee and water points.
+- **Fix:** Removed the boxes from the 158 frames not yet opened. They're not needed: the leg is found from the toes and water points, and the model's boxes are kept in the pre-fill backup.
+
+### 35. "Knee out" legs with no knee point, unseen legs marked "knee under water" (2026-11-28)
+
+- **Problem:** On straight or blurry legs (2868, 2901) the knee point was deleted but the answer stayed "knee out", so no score can be measured. The first pass also marked legs the model never found as "knee under water" with no points (12 submitted frames).
+- **Why:** On a straight leg no knee bend can be seen. A missing second leg got the model's default answer.
+- **Fix:** A "knee out" leg always gets a knee point, guessed about halfway between the toes and the hip. Reading the labels: "knee under water" with no toes or water point counts as "not out of the water" (FAIL either way); a "knee out" leg with no knee is left out of training. The 32 frames not yet opened now say "not out of the water".
+
+### 34. Many training-frame "legs" are arms, or can't be judged (2026-11-27)
+
+- **Problem:** In "M3 leg height - train" (213 frames, first pass by Claude, checked by Fadi), 23 of the model's "legs" were her arm or body, and 61 frames can't be judged (far or blurry 29, flat at the surface 5, deck 5, team part 7, other 15). The model's knee was moved on 69 frames, mostly when it sat at the water.
+- **Why:** The outline model confuses a raised arm with a leg; the picker chose frames near the water on purpose.
+- **Fix (partial):** These labels train the knee model on exactly these cases. A Label Studio pre-fill only shows with the project's model version, so the first pass keeps the model's name and marks my confidence in the score.
+
+### 33. Training frames with more than one swimmer (2026-11-25)
+
+- **Problem:** "M3 leg height - train" took frames from the Funchal video's team part (after 3:05), left out when picking box-label frames on Nov 9 but forgotten here: 7 team frames. 3 more frames show 2-3 people (maybe a coach or judges).
+- **Fix:** Fadi skips them (tasks listed); the picker now leaves out the team part (`TEAM_PART_FROM`).
+
 ### 32. Phone videos include deck, backstage and logo frames (2026-11-25)
 
 - **Problem:** 7 of the 30 phone-video frames picked for leg-height labels are not in the water (standing on the deck, in front of a flag, backstage, a logo screen, one underwater view). The outline model finds legs there, so they would be measured as legs out of the water (or FAIL).

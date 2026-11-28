@@ -69,9 +69,10 @@ def measure_frame(img, seg_model, knee_finder, device, conf=0.25):
 
 
 class OurKnees:
-    """Knees from our knee model (trained on leg crops, plan Task 8): one crop per leg box."""
+    """Knees from our knee model, one crop per leg box (plan Task 8). knees17c: the M2 knee crops +
+    Fadi's "M3 leg height - train" legs + "no leg here" crops (arms, bodies); experiments/height/results.md."""
 
-    def __init__(self, weights="experiments/limbs/output/knees17/weights/best.pt", device=None, conf_min=0.5):
+    def __init__(self, weights="experiments/limbs/output/knees17c/weights/best.pt", device=None, conf_min=0.5):
         from ultralytics import YOLO
 
         self.model, self.device, self.conf_min = YOLO(weights), device, conf_min

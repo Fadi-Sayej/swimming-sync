@@ -26,7 +26,9 @@ from swimsync.waterline.above_water import pick_device  # noqa: E402
 
 KNEES = (13, 14)
 OURS = {"our knee model (1 point)": "experiments/limbs/output/knees/weights/best.pt",
-        "our knee model (17-point layout)": "experiments/limbs/output/knees17/weights/best.pt"}
+        "our knee model (17-point layout)": "experiments/limbs/output/knees17/weights/best.pt",
+        "our knee model + leg height labels": "experiments/limbs/output/knees17b/weights/best.pt",
+        "our knee model + leg height labels + no-leg crops": "experiments/limbs/output/knees17c/weights/best.pt"}
 
 
 def leg_boxes(img_path, w, h):

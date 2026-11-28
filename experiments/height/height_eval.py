@@ -4,7 +4,7 @@ A labeled leg (toes clicked) matches the predicted leg whose toes point is neare
 25% of the labeled toes -> water length; otherwise the outline model didn't find it. Hand truth:
 status from the label, and when "knee out" the score from the clicks with the same formula.
 
-Usage: python experiments/height/height_eval.py [--knees pose|ours]   (Label Studio running)
+Usage: python experiments/height/height_eval.py [--knees pose|ours] [--weights PATH]   (Label Studio running)
 """
 import argparse
 from collections import Counter, defaultdict
@@ -39,10 +39,10 @@ def dist(a, b):
     return float(np.hypot(a[0] - b[0], a[1] - b[1]))
 
 
-def knee_finder(kind, dev):
+def knee_finder(kind, dev, weights=None):
     if kind == "ours":
         from swimsync.height.measure import OurKnees
-        return OurKnees(device=dev)
+        return OurKnees(weights, device=dev) if weights else OurKnees(device=dev)
     return PoseKnees(device=dev)
 
 
@@ -57,12 +57,13 @@ def image_path(name):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--knees", choices=("pose", "ours"), default="pose")
+    p.add_argument("--weights", help="our knee model's weights (default: OurKnees' own)")
     a = p.parse_args()
     dev = pick_device()
     api = _api()
     assert TITLE in project_titles(api), f"no project '{TITLE}'"
     lab, n_tasks = labeled_frames(api, TITLE)
-    seg, knees, pool = YOLO(SEG), knee_finder(a.knees, dev), PoolShotClassifier()
+    seg, knees, pool = YOLO(SEG), knee_finder(a.knees, dev, a.weights), PoolShotClassifier()
     n = defaultdict(Counter)
     diffs, point_err = defaultdict(list), defaultdict(lambda: defaultdict(list))
     for name, result in sorted(lab.items()):
@@ -84,8 +85,11 @@ def main():
         hand_pass = sum(st == "knee out" for st in statuses)
         model_pass = sum(q.status == "pass" for q in model)
         n[g]["frames judged"] += 1
-        n[g]["pass/fail counts agree"] += (hand_pass == model_pass
-                                           and len(statuses) - hand_pass == sum(q.status == "fail" for q in model))
+        agree = hand_pass == model_pass and len(statuses) - hand_pass == sum(q.status == "fail" for q in model)
+        n[g]["pass/fail counts agree"] += agree
+        if not agree:
+            n[g]["model passes more legs" if model_pass > hand_pass else
+                 "model passes fewer legs" if model_pass < hand_pass else "other"] += 1
         for leg in hand.values():
             if leg["status"] not in ("knee out", "knee under water") or leg["water"] is None:
                 continue
@@ -123,7 +127,9 @@ def main():
               f"{c['legs out']} legs out of the water "
               f"(pressed together on {c['pressed together']} frames)")
         print(f"  per frame, number of legs passing / failing agrees on {c['pass/fail counts agree']} of "
-              f"{c['frames judged']} frames ({100 * c['pass/fail counts agree'] / max(c['frames judged'], 1):.0f}%)")
+              f"{c['frames judged']} frames ({100 * c['pass/fail counts agree'] / max(c['frames judged'], 1):.0f}%); "
+              f"the others: model passes more legs {c['model passes more legs']}, fewer "
+              f"{c['model passes fewer legs']}, same passes but a leg missing or extra {c['other']}")
         print(f"  outline model found {c['leg found']} of {c['legs out']} legs")
         print(f"  no knee found on {c['no knee found']} (knee out by hand on {c['no knee found, knee out by hand']})")
         print(f"  knee out / under agrees on {c['out/under agree']} of {c['judged']} "

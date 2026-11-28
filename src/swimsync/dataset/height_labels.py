@@ -17,6 +17,7 @@ from pathlib import Path
 
 TITLE = "M3 leg height - test"
 TRAIN_TITLE = "M3 leg height - train"
+TEAM_PART_FROM = {"funchal2025_men_solo_team": 185.0}  # seconds; the team routine after it (docs/videos.md)
 ROOT = Path("data/raw/frames/m2")
 STATUSES = ("knee out", "knee under water", "not out of the water")
 LEG_COLORS = {"1": "#2a78d6", "2": "#eb6834"}
@@ -128,7 +129,9 @@ def train_project(n_total=300, per_video_scan=80, min_gap=2.0, min_pool=0.7):
     img_dir.mkdir(parents=True, exist_ok=True)
     tasks = []
     for s in scans:
-        times = pick_spread([c["t"] for c in s["candidates"] if c.get("pool", 1) >= min_pool], per_video_scan, min_gap)
+        team_from = TEAM_PART_FROM.get(Path(s["video"]).stem, float("inf"))  # solos only
+        times = pick_spread([c["t"] for c in s["candidates"] if c.get("pool", 1) >= min_pool and c["t"] < team_from],
+                            per_video_scan, min_gap)
         cap, found = cv2.VideoCapture(s["video"]), []
         for t in times:
             cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000)
